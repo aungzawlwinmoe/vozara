@@ -1,0 +1,29 @@
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "vozara-language-services",
+          "region": "asia-east1"
+        }
+      }
+    ]
+  },
+  "firestore": [
+    {
+      "database": "ai-studio-e3c5279f-6274-458a-99f0-715ed626eed6",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    }
+  ]
+}

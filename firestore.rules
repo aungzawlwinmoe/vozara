@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Contact form submissions
+    match /contact_submissions/{submissionId} {
+      allow create, read, delete: if true;
+      allow update: if false;
+    }
+
+    // Interpreter applications
+    match /interpreter_submissions/{submissionId} {
+      allow create, read, delete: if true;
+      allow update: if false;
+    }
+
+    // Backend configuration settings
+    match /settings/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

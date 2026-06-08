@@ -1,0 +1,6 @@
+{
+  "name": "Vozara Language Services",
+  "description": "Professional language access provider connecting voices across languages with certified interpretation and translation services.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

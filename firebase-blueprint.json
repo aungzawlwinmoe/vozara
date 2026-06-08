@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "ContactSubmission": {
+      "title": "Contact Submission",
+      "description": "Represents research, questions, or quote requests sent by clients.",
+      "type": "object",
+      "properties": {
+        "full_name": {
+          "type": "string",
+          "description": "Full name of the person submitting the form"
+        },
+        "submitter_email": {
+          "type": "string",
+          "description": "Work/personal email domain address"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Optional phone contact digits"
+        },
+        "organization": {
+          "type": "string",
+          "description": "Company name or medical network"
+        },
+        "service": {
+          "type": "string",
+          "description": "Linguistic service requesting quotes for"
+        },
+        "language_pair": {
+          "type": "string",
+          "description": "Source and target languages e.g. EN-ES"
+        },
+        "message": {
+          "type": "string",
+          "description": "Scope details or project context message"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO date format when saved to database"
+        }
+      },
+      "required": ["full_name", "submitter_email", "message", "timestamp"]
+    },
+    "InterpreterSubmission": {
+      "title": "Interpreter Application",
+      "description": "Linguist job application and credentials declaration.",
+      "type": "object",
+      "properties": {
+        "full_name": {
+          "type": "string",
+          "description": "Applicant full legal name"
+        },
+        "submitter_email": {
+          "type": "string",
+          "description": "Applicant primary contact email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Primary phone number"
+        },
+        "location": {
+          "type": "string",
+          "description": "City, state, country"
+        },
+        "primary_language": {
+          "type": "string",
+          "description": "Primary working language pair"
+        },
+        "additional_languages": {
+          "type": "string",
+          "description": "Additional dialect credentials"
+        },
+        "interpreting_modes": {
+          "type": "string",
+          "description": "Modes e.g. VRI, OPI, face-to-face"
+        },
+        "industries": {
+          "type": "string",
+          "description": "Key vocabulary domains e.g. medical, legal"
+        },
+        "experience_years": {
+          "type": "string",
+          "description": "Total career experience years dropdown option"
+        },
+        "certifications": {
+          "type": "string",
+          "description": "List of credentials e.g. state certified"
+        },
+        "medical_legal_knowledge": {
+          "type": "string",
+          "description": "Terminology training status"
+        },
+        "technical_setup": {
+          "type": "string",
+          "description": "Equipment compliance affirmation"
+        },
+        "availability": {
+          "type": "string",
+          "description": "Expected availability schedule"
+        },
+        "linkedin_or_portfolio": {
+          "type": "string",
+          "description": "Optional LinkedIn profile URL"
+        },
+        "additional_info": {
+          "type": "string",
+          "description": "Cover letter text or notes field"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO date format when saved to database"
+        }
+      },
+      "required": ["full_name", "submitter_email", "phone", "location", "primary_language", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/contact_submissions/{submissionId}": {
+      "schema": "ContactSubmission",
+      "description": "Collection of query/quote submissions sent via contact page or quote modal"
+    },
+    "/interpreter_submissions/{submissionId}": {
+      "schema": "InterpreterSubmission",
+      "description": "Collection of recruiter interpreter applications submitted through the career portal"
+    }
+  }
+}
