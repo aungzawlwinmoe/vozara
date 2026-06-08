@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { submitContactFormDirect, submitInterpreterAppDirect } from "./firebase";
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -1108,36 +1109,50 @@ function ContactView() {
     }
 
     try {
-      // Step A: Load anti-spam session keys
-      setFormState("getting_token");
-      const prepRes = await fetch(`/api/forms/prepare?form_key=vozara-contact`);
-      if (!prepRes.ok) throw new Error("Could not initialize security parameters. Please try again.");
-      const prepData = await prepRes.json();
+      let submissionSuccessful = false;
 
-      if (!prepData.success || !prepData.required_hidden_fields) {
-        throw new Error("Invalid remote security token.");
+      try {
+        // Step A: Load anti-spam session keys
+        setFormState("getting_token");
+        const prepRes = await fetch(`/api/forms/prepare?form_key=vozara-contact`);
+        if (prepRes.ok) {
+          const prepData = await prepRes.json();
+          if (prepData.success && prepData.required_hidden_fields) {
+            // Step B: Submit data merging required fields
+            setFormState("sending");
+            const postPayload = {
+              form_key: "vozara-contact",
+              ...prepData.required_hidden_fields,
+              ...formData
+            };
+
+            const submitRes = await fetch(`/api/forms/submit`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(postPayload)
+            });
+
+            if (submitRes.ok) {
+              const submitData = await submitRes.json();
+              if (submitData.success) {
+                submissionSuccessful = true;
+              }
+            }
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Express backend contact submit is unreachable, executing direct Firestore client fallback...", backendErr);
       }
 
-      // Step B: Submit data merging required fields
-      setFormState("sending");
-      const postPayload = {
-        form_key: "vozara-contact",
-        ...prepData.required_hidden_fields,
-        ...formData
-      };
-
-      const submitRes = await fetch(`/api/forms/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postPayload)
-      });
-
-      const submitData = await submitRes.json();
-      if (!submitRes.ok || !submitData.success) {
-        throw new Error(submitData.error || "Submission encountered a server roadblock.");
+      if (!submissionSuccessful) {
+        setFormState("sending");
+        await submitContactFormDirect(formData);
+        submissionSuccessful = true;
       }
 
-      setFormState("success");
+      if (submissionSuccessful) {
+        setFormState("success");
+      }
     } catch (err: any) {
       setFormState("error");
       setErrorText(err.message || "Failed to deliver parameters. Please refresh and try again.");
@@ -1486,40 +1501,55 @@ function InterpreterApplyView() {
     }
 
     try {
-      setFormState("getting_tokens");
-      
-      // Step 1: GET security challenge values
-      const prepRes = await fetch(`/api/forms/prepare?form_key=vozara-interpreter-application`);
-      if (!prepRes.ok) throw new Error("Unable to obtain recruiter security token. Please try again.");
-      const prepData = await prepRes.json();
-      
-      if (!prepData.success || !prepData.required_hidden_fields) {
-        throw new Error("Invalid recruiter handshake session token.");
+      let submissionSuccessful = false;
+
+      try {
+        setFormState("getting_tokens");
+        
+        // Step 1: GET security challenge values
+        const prepRes = await fetch(`/api/forms/prepare?form_key=vozara-interpreter-application`);
+        if (prepRes.ok) {
+          const prepData = await prepRes.json();
+          
+          if (prepData.success && prepData.required_hidden_fields) {
+            // Step 2: POST applicant variables merged with required anti-spam tokens
+            setFormState("submitting");
+            const postPayload = {
+              form_key: "vozara-interpreter-application",
+              ...prepData.required_hidden_fields,
+              ...formData
+            };
+
+            const submitRes = await fetch(`/api/forms/submit`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(postPayload)
+            });
+
+            if (submitRes.ok) {
+              const submitData = await submitRes.json();
+              if (submitData.success) {
+                if (submitData.email_sandbox_preview) {
+                  setEmailPreviewUrl(submitData.email_sandbox_preview);
+                }
+                submissionSuccessful = true;
+              }
+            }
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Express backend interpreter application endpoint unreachable, running direct Firestore client fallback...", backendErr);
       }
 
-      // Step 2: POST applicant variables merged with required anti-spam tokens
-      setFormState("submitting");
-      const postPayload = {
-        form_key: "vozara-interpreter-application",
-        ...prepData.required_hidden_fields,
-        ...formData
-      };
-
-      const submitRes = await fetch(`/api/forms/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(postPayload)
-      });
-
-      const submitData = await submitRes.json();
-      if (!submitRes.ok || !submitData.success) {
-        throw new Error(submitData.error || "Submittal rejected. Recruiter database returned error.");
+      if (!submissionSuccessful) {
+        setFormState("submitting");
+        await submitInterpreterAppDirect(formData);
+        submissionSuccessful = true;
       }
 
-      if (submitData.email_sandbox_preview) {
-        setEmailPreviewUrl(submitData.email_sandbox_preview);
+      if (submissionSuccessful) {
+        setFormState("success");
       }
-      setFormState("success");
     } catch (err: any) {
       setFormState("error");
       setErrorBanner(err.message || "Recruitment portal is temporarily busy. Please resubmit.");

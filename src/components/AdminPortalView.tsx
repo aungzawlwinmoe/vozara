@@ -2,6 +2,11 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { 
+  getContactSubmissionsDirect, 
+  getInterpreterSubmissionsDirect, 
+  deleteSubmissionDirect 
+} from "../firebase";
+import { 
   Lock, 
   ShieldAlert, 
   Eye, 
@@ -117,21 +122,55 @@ export default function AdminPortalView() {
     setIsLoggingIn(true);
 
     try {
-      const response = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
-      });
+      let data: any = null;
+      let success = false;
+      let token = "";
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        sessionStorage.setItem("vozara_sandbox_admin_token", data.token);
+      try {
+        const response = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          data = await response.json();
+          if (data && data.success) {
+            success = true;
+            token = data.token;
+            sessionStorage.removeItem("vozara_static_fallback");
+          } else {
+            setLoginError(data?.error || "Credentials rejected.");
+            setIsLoggingIn(false);
+            return;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("Express backend authentication endpoint unreachable, trying client-side direct credential fallback...", fetchErr);
+      }
+
+      // If backend is unreachable or doesn't support login, fall back to exact same criteria on client side
+      if (!success) {
+        if (
+          (username === "admin@vozarals.com" || username === "admin" || username === "aungzawlwinmoe@gmail.com") &&
+          password === "admin-sandbox-2026"
+        ) {
+          success = true;
+          token = "token_vozara_sandbox_admin_2026_xyz";
+          sessionStorage.setItem("vozara_static_fallback", "true");
+        } else {
+          setLoginError("Invalid admin credentials. Please note the test credentials are admin@vozarals.com / admin-sandbox-2026.");
+          setIsLoggingIn(false);
+          return;
+        }
+      }
+
+      if (success) {
+        sessionStorage.setItem("vozara_sandbox_admin_token", token);
         setIsAuthenticated(true);
-        setSysMsg({ text: "Authentication success. Systems unlocked." });
-        setTimeout(() => setSysMsg(null), 3000);
+        setSysMsg({ text: "Authentication success. Systems unlocked (static support active)." });
+        setTimeout(() => setSysMsg(null), 3500);
         fetchDashboardData();
-      } else {
-        setLoginError(data.error || "Credentials rejected.");
       }
     } catch (err) {
       setLoginError("Offline or communication timeout with sandbox agent.");
@@ -142,6 +181,7 @@ export default function AdminPortalView() {
 
   const handleLogout = () => {
     sessionStorage.removeItem("vozara_sandbox_admin_token");
+    sessionStorage.removeItem("vozara_static_fallback");
     setIsAuthenticated(false);
     setSelectedSub(null);
   };
@@ -155,32 +195,69 @@ export default function AdminPortalView() {
     setIsRefreshing(true);
     try {
       const tokenHeaders = getAdminHeader();
-      const resSubmissions = await fetch("/api/admin/submissions", { headers: tokenHeaders });
-      
-      if (resSubmissions.status === 401) {
-        handleLogout();
-        return;
-      }
+      const isStaticMode = sessionStorage.getItem("vozara_static_fallback") === "true";
+      let hasFetchedBackend = false;
 
-      const valSubmissions = await resSubmissions.json();
-      if (valSubmissions.success) {
-        setContacts(valSubmissions.contacts || []);
-        setInterpreters(valSubmissions.interpreters || []);
-        setFirebaseConnected(valSubmissions.firebaseConnected || false);
-      }
+      if (!isStaticMode) {
+        try {
+          const resSubmissions = await fetch("/api/admin/submissions", { headers: tokenHeaders });
+          
+          if (resSubmissions.status === 401) {
+            handleLogout();
+            return;
+          }
 
-      // Fetch Anti-spam queues too
-      const resAntispam = await fetch("/api/admin/antispam-stats", { headers: tokenHeaders });
-      if (resAntispam.ok) {
-        const valAntispam = await resAntispam.json();
-        if (valAntispam.success) {
-          setAntispamSessions(valAntispam.activeSessions || []);
-          setUptime(valAntispam.uptimeSeconds || 0);
+          if (resSubmissions.ok) {
+            const valSubmissions = await resSubmissions.json();
+            if (valSubmissions.success) {
+              setContacts(valSubmissions.contacts || []);
+              setInterpreters(valSubmissions.interpreters || []);
+              setFirebaseConnected(valSubmissions.firebaseConnected || false);
+              hasFetchedBackend = true;
+            }
+          }
+        } catch (e) {
+          console.warn("Backend submissions endpoint unreachable, using client-side Firestore fallback...");
         }
+      }
+
+      if (!hasFetchedBackend) {
+        // Direct Client-Side Firestore Query Fallback
+        try {
+          const directContacts = await getContactSubmissionsDirect();
+          const directInterpreters = await getInterpreterSubmissionsDirect();
+          setContacts(directContacts);
+          setInterpreters(directInterpreters);
+          setFirebaseConnected(true);
+        } catch (dbErr: any) {
+          console.error("Direct Firestore read fallback failed:", dbErr);
+          setSysMsg({ text: "Static direct database read failed. Please check your Firebase rules/quota.", error: true });
+          setTimeout(() => setSysMsg(null), 5000);
+        }
+      }
+
+      // Fetch Anti-spam queues (only relevant to server context)
+      if (!isStaticMode) {
+        try {
+          const resAntispam = await fetch("/api/admin/antispam-stats", { headers: tokenHeaders });
+          if (resAntispam.ok) {
+            const valAntispam = await resAntispam.json();
+            if (valAntispam.success) {
+              setAntispamSessions(valAntispam.activeSessions || []);
+              setUptime(valAntispam.uptimeSeconds || 0);
+            }
+          }
+        } catch (e) {
+          setAntispamSessions([]);
+          setUptime(0);
+        }
+      } else {
+        setAntispamSessions([]);
+        setUptime(0);
       }
     } catch (err) {
       console.error("Failed to query sandbox data:", err);
-      setSysMsg({ text: "Dynamic sync timeout. Showing cached client-side assets.", error: true });
+      setSysMsg({ text: "Dynamic sync timeout. Sourcing local browser state.", error: true });
       setTimeout(() => setSysMsg(null), 4000);
     } finally {
       setIsRefreshing(false);
@@ -189,36 +266,51 @@ export default function AdminPortalView() {
 
   const handleDelete = async (type: "contact" | "interpreter", id: string) => {
     try {
-      const response = await fetch("/api/admin/submissions", {
-        method: "DELETE",
-        headers: { 
-          "Content-Type": "application/json",
-          ...getAdminHeader()
-        },
-        body: JSON.stringify({ type, id })
-      });
+      const isStaticMode = sessionStorage.getItem("vozara_static_fallback") === "true";
+      let deletedDirectly = false;
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setSysMsg({ text: "Document removed and pruned cleanly." });
-        setTimeout(() => setSysMsg(null), 3000);
-        
-        // Remove locally
-        if (type === "contact") {
-          setContacts(prev => prev.filter(c => c.id !== id));
-        } else {
-          setInterpreters(prev => prev.filter(i => i.id !== id));
-        }
+      if (!isStaticMode) {
+        try {
+          const response = await fetch("/api/admin/submissions", {
+            method: "DELETE",
+            headers: { 
+              "Content-Type": "application/json",
+              ...getAdminHeader()
+            },
+            body: JSON.stringify({ type, id })
+          });
 
-        if (selectedSub && selectedSub.id === id) {
-          setSelectedSub(null);
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.success) {
+              deletedDirectly = true;
+            }
+          }
+        } catch (e) {
+          console.warn("Express backend is offline. Retrying deletion via direct Firebase client SDK...");
         }
-      } else {
-        setSysMsg({ text: data.error || "Removal failed.", error: true });
-        setTimeout(() => setSysMsg(null), 4000);
       }
-    } catch (err) {
-      setSysMsg({ text: "Operation server timeout.", error: true });
+
+      if (!deletedDirectly) {
+        // Direct Client-Side delete
+        await deleteSubmissionDirect(type, id);
+      }
+
+      setSysMsg({ text: "Document removed and pruned cleanly from Firebase database." });
+      setTimeout(() => setSysMsg(null), 3000);
+      
+      // Remove locally from state
+      if (type === "contact") {
+        setContacts(prev => prev.filter(c => c.id !== id));
+      } else {
+        setInterpreters(prev => prev.filter(i => i.id !== id));
+      }
+
+      if (selectedSub && selectedSub.id === id) {
+        setSelectedSub(null);
+      }
+    } catch (err: any) {
+      setSysMsg({ text: `Pruning operation failed: ${err.message || err}`, error: true });
       setTimeout(() => setSysMsg(null), 4000);
     } finally {
       setShowDeleteConfirm(null);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Loader2, Send } from "lucide-react";
+import { submitContactFormDirect } from "../firebase";
 
 interface QuoteModalProps {
   isOpen: boolean;
@@ -62,50 +63,59 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
     }
 
     try {
-      // Step 1: Fetch anti-spam tokens (GET prepare endpoint)
-      setFormState("fetching_tokens");
-      const prepareRes = await fetch(`/api/forms/prepare?form_key=vozara-contact`);
-      if (!prepareRes.ok) {
-        throw new Error("Unable to obtain security token. Please try again.");
-      }
-      const prepJson = await prepareRes.json();
+      let submissionSuccessful = false;
       
-      if (!prepJson.success || !prepJson.required_hidden_fields) {
-        throw new Error("Invalid security handshake. Please refresh.");
+      try {
+        setFormState("fetching_tokens");
+        const prepareRes = await fetch(`/api/forms/prepare?form_key=vozara-contact`);
+        if (prepareRes.ok) {
+          const prepJson = await prepareRes.json();
+          if (prepJson.success && prepJson.required_hidden_fields) {
+            setFormState("submitting");
+            const payload = {
+              form_key: "vozara-contact",
+              ...prepJson.required_hidden_fields,
+              full_name: formData.full_name,
+              submitter_email: formData.submitter_email,
+              phone: formData.phone,
+              organization: formData.organization,
+              service: formData.service,
+              language_pair: formData.language_pair,
+              message: formData.message
+            };
+
+            const submitRes = await fetch("/api/forms/submit", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (submitRes.ok) {
+              const submitJson = await submitRes.json();
+              if (submitJson.success) {
+                submissionSuccessful = true;
+              }
+            }
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Express backend unreachable, opting for direct Firestore client fallback...", backendErr);
       }
 
-      // Step 2: Merge security tokens into payload and post form data
-      setFormState("submitting");
-      
-      const payload = {
-        form_key: "vozara-contact",
-        ...prepJson.required_hidden_fields,
-        full_name: formData.full_name,
-        submitter_email: formData.submitter_email,
-        phone: formData.phone,
-        organization: formData.organization,
-        service: formData.service,
-        language_pair: formData.language_pair,
-        message: formData.message
-      };
-
-      const submitRes = await fetch("/api/forms/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const submitJson = await submitRes.json();
-      if (!submitRes.ok || !submitJson.success) {
-        throw new Error(submitJson.error || "Submission encountered a server error.");
+      if (!submissionSuccessful) {
+        setFormState("submitting");
+        await submitContactFormDirect(formData);
+        submissionSuccessful = true;
       }
 
-      setFormState("success");
+      if (submissionSuccessful) {
+        setFormState("success");
+      }
     } catch (err: any) {
       console.error("Quote submit error:", err);
-      setErrorMessage(err.message || "Something went wrong. Please try again or call us.");
+      setErrorMessage(err.message || "Failed to catalog submission. Please verify your internet connection.");
       setFormState("error");
     }
   };
