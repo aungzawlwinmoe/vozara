@@ -135,7 +135,7 @@ export const homeHomeStats: StatMetric[] = [
 
 export const aboutStats: StatMetric[] = [
   { id: "a1", value: "100+", number: 100, suffix: "+", label: "Languages Supported" },
-  { id: "a2", value: "500+", number: 500, suffix: "+", label: "Active Certified Experts" },
+  { id: "a2", value: "500+", number: 500, suffix: "+", label: "Interpreters hired for partners" },
   { id: "a3", value: "4+", number: 4, suffix: "+", label: "Years of Proven Success" },
   { id: "a4", value: "98%", number: 98, suffix: "%", label: "Client Partner Satisfaction" }
 ];
