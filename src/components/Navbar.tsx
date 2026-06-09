@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Globe, Calendar, Phone, Lock } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 
 interface NavbarProps {
   onOpenQuote: (service?: string) => void;
@@ -211,6 +211,23 @@ export default function Navbar({ onOpenQuote }: NavbarProps) {
               {link.label}
             </Link>
           ))}
+          
+          {/* Admin Portal Link */}
+          <Link
+            id="mobile-nav-admin"
+            to="/admin"
+            onClick={handleLinkClick}
+            className={`block px-4 py-3 rounded-sm font-bold tracking-wide transition-all ${
+              isActive("/admin")
+                ? "bg-brand-navy/5 text-brand-navy pl-6 border-l-4 border-brand-navy"
+                : "text-gray-500 hover:bg-gray-50 hover:text-brand-orange"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-brand-orange" />
+              Admin Portal
+            </span>
+          </Link>
           
           <div className="pt-4 px-4 space-y-3">
             <button

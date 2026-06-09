@@ -1099,6 +1099,74 @@ function ContactView() {
 
   const [formState, setFormState] = useState<"idle" | "getting_token" | "sending" | "success" | "error">("idle");
   const [errorText, setErrorText] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const isEmailValid = (emailStr: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr.trim());
+  };
+
+  const getValidationState = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const val = formData[field].trim();
+    const isTouched = touched[field] || formState === "error";
+
+    if (field === "full_name") {
+      const isValid = val.length >= 2;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "submitter_email") {
+      const isValid = isEmailValid(val);
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "phone") {
+      if (!val) return "idle";
+      const isValid = val.replace(/\D/g, "").length >= 7;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "message") {
+      const isValid = val.length >= 5;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    return "idle";
+  };
+
+  const getInputClassName = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const state = getValidationState(field);
+    const baseClass = "w-full px-3 py-2 pr-10 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 transition-all";
+    if (state === "valid") {
+      return `${baseClass} border-emerald-500/85 focus:ring-emerald-500/60 focus:border-emerald-500`;
+    }
+    if (state === "invalid") {
+      return `${baseClass} border-red-500/85 focus:ring-red-500/60 focus:border-red-500`;
+    }
+    return `${baseClass} focus:ring-brand-orange focus:border-brand-orange`;
+  };
+
+  const renderIndicator = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const state = getValidationState(field);
+    if (state === "valid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 flex items-center">
+          <Check className="w-4 h-4" />
+        </span>
+      );
+    }
+    if (state === "invalid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400 flex items-center">
+          <AlertCircle className="w-4 h-4" />
+        </span>
+      );
+    }
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1170,6 +1238,7 @@ function ContactView() {
       message: ""
     });
     setFormState("idle");
+    setTouched({});
   };
 
   const servicesOption = [
@@ -1316,30 +1385,38 @@ function ContactView() {
                         <label htmlFor="full_name" className="block text-[11px] font-bold uppercase tracking-wider text-gray-200 mb-1 font-mono">
                           Full Name <span className="text-brand-orange">*</span>
                         </label>
-                        <input
-                          type="text"
-                          id="full_name"
-                          required
-                          value={formData.full_name}
-                          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                          className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                          placeholder="Your Name"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            id="full_name"
+                            required
+                            value={formData.full_name}
+                            onBlur={() => setTouched((prev) => ({ ...prev, full_name: true }))}
+                            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                            className={getInputClassName("full_name")}
+                            placeholder="Your Name"
+                          />
+                          {renderIndicator("full_name")}
+                        </div>
                       </div>
                       
                       <div>
                         <label htmlFor="submitter_email" className="block text-[11px] font-bold uppercase tracking-wider text-gray-200 mb-1 font-mono">
                           Work Email <span className="text-brand-orange">*</span>
                         </label>
-                        <input
-                          type="email"
-                          id="submitter_email"
-                          required
-                          value={formData.submitter_email}
-                          onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
-                          className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                          placeholder="name@company.com"
-                        />
+                        <div className="relative">
+                          <input
+                            type="email"
+                            id="submitter_email"
+                            required
+                            value={formData.submitter_email}
+                            onBlur={() => setTouched((prev) => ({ ...prev, submitter_email: true }))}
+                            onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
+                            className={getInputClassName("submitter_email")}
+                            placeholder="name@company.com"
+                          />
+                          {renderIndicator("submitter_email")}
+                        </div>
                       </div>
                     </div>
 
@@ -1348,14 +1425,18 @@ function ContactView() {
                         <label htmlFor="phone" className="block text-[11px] font-bold uppercase tracking-wider text-gray-200 mb-1 font-mono">
                           Phone Number
                         </label>
-                        <input
-                          type="tel"
-                          id="phone"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                          placeholder="+1 (210) 548-2782"
-                        />
+                        <div className="relative">
+                          <input
+                            type="tel"
+                            id="phone"
+                            value={formData.phone}
+                            onBlur={() => setTouched((prev) => ({ ...prev, phone: true }))}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            className={getInputClassName("phone")}
+                            placeholder="+1 (210) 548-2782"
+                          />
+                          {renderIndicator("phone")}
+                        </div>
                       </div>
                       
                       <div>
@@ -1409,15 +1490,19 @@ function ContactView() {
                       <label htmlFor="message" className="block text-[11px] font-bold uppercase tracking-wider text-gray-200 mb-1 font-mono">
                         How can we help? <span className="text-brand-orange">*</span>
                       </label>
-                      <textarea
-                        id="message"
-                        required
-                        rows={4}
-                        value={formData.message}
-                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                        className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                        placeholder="Provide details about your project, timeline, location, or specialized requirements..."
-                      />
+                      <div className="relative">
+                        <textarea
+                          id="message"
+                          required
+                          rows={4}
+                          value={formData.message}
+                          onBlur={() => setTouched((prev) => ({ ...prev, message: true }))}
+                          onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                          className={getInputClassName("message")}
+                          placeholder="Provide details about your project, timeline, location, or specialized requirements..."
+                        />
+                        {renderIndicator("message")}
+                      </div>
                     </div>
 
                     <div className="pt-2">
@@ -1490,6 +1575,93 @@ function InterpreterApplyView() {
   const [formState, setFormState] = useState<"idle" | "getting_tokens" | "submitting" | "success" | "error">("idle");
   const [errorBanner, setErrorBanner] = useState("");
   const [emailPreviewUrl, setEmailPreviewUrl] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const isEmailValid = (emailStr: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr.trim());
+  };
+
+  const getValidationState = (field: "full_name" | "submitter_email" | "phone" | "location" | "primary_language" | "linkedin_or_portfolio" | "additional_languages") => {
+    const val = formData[field] ? formData[field].trim() : "";
+    const isTouched = touched[field] || formState === "error";
+
+    if (field === "full_name") {
+      const isValid = val.length >= 2;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "submitter_email") {
+      const isValid = isEmailValid(val);
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "phone") {
+      const isValid = val.replace(/\D/g, "").length >= 7;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "location") {
+      const isValid = val.length >= 3;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "primary_language") {
+      const isValid = val.length >= 2;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "linkedin_or_portfolio") {
+      if (!val) return "idle";
+      const isValid = val.length >= 5;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "additional_languages") {
+      if (!val) return "idle";
+      const isValid = val.length >= 2;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    return "idle";
+  };
+
+  const getInputClassName = (field: "full_name" | "submitter_email" | "phone" | "location" | "primary_language" | "linkedin_or_portfolio" | "additional_languages") => {
+    const state = getValidationState(field);
+    const baseClass = "w-full px-3 py-2 pr-10 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 transition-all";
+    if (state === "valid") {
+      return `${baseClass} border-emerald-500/85 focus:ring-emerald-500/60 focus:border-emerald-500`;
+    }
+    if (state === "invalid") {
+      return `${baseClass} border-red-500/85 focus:ring-red-500/60 focus:border-red-500`;
+    }
+    return `${baseClass} focus:ring-brand-orange focus:border-brand-orange`;
+  };
+
+  const renderIndicator = (field: "full_name" | "submitter_email" | "phone" | "location" | "primary_language" | "linkedin_or_portfolio" | "additional_languages") => {
+    const state = getValidationState(field);
+    if (state === "valid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 flex items-center">
+          <Check className="w-4 h-4" />
+        </span>
+      );
+    }
+    if (state === "invalid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 flex items-center">
+          <AlertCircle className="w-4 h-4" />
+        </span>
+      );
+    }
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1576,6 +1748,7 @@ function InterpreterApplyView() {
     });
     setEmailPreviewUrl("");
     setFormState("idle");
+    setTouched({});
   };
 
   return (
@@ -1715,30 +1888,38 @@ function InterpreterApplyView() {
                           <label htmlFor="app_full_name" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Full Legal Name <span className="text-brand-orange">*</span>
                           </label>
-                          <input
-                            type="text"
-                            id="app_full_name"
-                            required
-                            value={formData.full_name}
-                            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="John Sebastian Doe"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              id="app_full_name"
+                              required
+                              value={formData.full_name}
+                              onBlur={() => setTouched((prev) => ({ ...prev, full_name: true }))}
+                              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                              className={getInputClassName("full_name")}
+                              placeholder="John Sebastian Doe"
+                            />
+                            {renderIndicator("full_name")}
+                          </div>
                         </div>
                         
                         <div>
                           <label htmlFor="app_email" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Email Address <span className="text-brand-orange">*</span>
                           </label>
-                          <input
-                            type="email"
-                            id="app_email"
-                            required
-                            value={formData.submitter_email}
-                            onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="johndoe@email.com"
-                          />
+                          <div className="relative">
+                            <input
+                              type="email"
+                              id="app_email"
+                              required
+                              value={formData.submitter_email}
+                              onBlur={() => setTouched((prev) => ({ ...prev, submitter_email: true }))}
+                              onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
+                              className={getInputClassName("submitter_email")}
+                              placeholder="johndoe@email.com"
+                            />
+                            {renderIndicator("submitter_email")}
+                          </div>
                         </div>
                       </div>
 
@@ -1747,30 +1928,38 @@ function InterpreterApplyView() {
                           <label htmlFor="app_phone" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Phone Number <span className="text-brand-orange">*</span>
                           </label>
-                          <input
-                            type="tel"
-                            id="app_phone"
-                            required
-                            value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="+1 (210) 548-2782"
-                          />
+                          <div className="relative">
+                            <input
+                              type="tel"
+                              id="app_phone"
+                              required
+                              value={formData.phone}
+                              onBlur={() => setTouched((prev) => ({ ...prev, phone: true }))}
+                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                              className={getInputClassName("phone")}
+                              placeholder="+1 (210) 548-2782"
+                            />
+                            {renderIndicator("phone")}
+                          </div>
                         </div>
 
                         <div>
                           <label htmlFor="app_loc" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Location (City, State, Country) <span className="text-brand-orange">*</span>
                           </label>
-                          <input
-                            type="text"
-                            id="app_loc"
-                            required
-                            value={formData.location}
-                            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="Seattle, WA, USA"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              id="app_loc"
+                              required
+                              value={formData.location}
+                              onBlur={() => setTouched((prev) => ({ ...prev, location: true }))}
+                              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                              className={getInputClassName("location")}
+                              placeholder="Seattle, WA, USA"
+                            />
+                            {renderIndicator("location")}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1787,29 +1976,37 @@ function InterpreterApplyView() {
                           <label htmlFor="app_primary_lang" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Primary Language Pair <span className="text-brand-orange">*</span>
                           </label>
-                          <input
-                            type="text"
-                            id="app_primary_lang"
-                            required
-                            value={formData.primary_language}
-                            onChange={(e) => setFormData({ ...formData, primary_language: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="Spanish (EN-ES) / Vietnamese (EN-VI) etc..."
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              id="app_primary_lang"
+                              required
+                              value={formData.primary_language}
+                              onBlur={() => setTouched((prev) => ({ ...prev, primary_language: true }))}
+                              onChange={(e) => setFormData({ ...formData, primary_language: e.target.value })}
+                              className={getInputClassName("primary_language")}
+                              placeholder="Spanish (EN-ES) / Vietnamese (EN-VI) etc..."
+                            />
+                            {renderIndicator("primary_language")}
+                          </div>
                         </div>
 
                         <div>
                           <label htmlFor="app_add_lang" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                             Additional Languages / Dialects
                           </label>
-                          <input
-                            type="text"
-                            id="app_add_lang"
-                            value={formData.additional_languages}
-                            onChange={(e) => setFormData({ ...formData, additional_languages: e.target.value })}
-                            className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                            placeholder="e.g. Catalan, Portuguese"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              id="app_add_lang"
+                              value={formData.additional_languages}
+                              onBlur={() => setTouched((prev) => ({ ...prev, additional_languages: true }))}
+                              onChange={(e) => setFormData({ ...formData, additional_languages: e.target.value })}
+                              className={getInputClassName("additional_languages")}
+                              placeholder="e.g. Catalan, Portuguese"
+                            />
+                            {renderIndicator("additional_languages")}
+                          </div>
                         </div>
                       </div>
 
@@ -1955,14 +2152,18 @@ function InterpreterApplyView() {
                         <label htmlFor="app_linkedin" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                           LinkedIn or Portfolio Link
                         </label>
-                        <input
-                          type="url"
-                          id="app_linkedin"
-                          value={formData.linkedin_or_portfolio}
-                          onChange={(e) => setFormData({ ...formData, linkedin_or_portfolio: e.target.value })}
-                          className="w-full px-3 py-2 bg-[#1b275c] border border-white/15 rounded-sm text-sm text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-brand-orange focus:border-brand-orange"
-                          placeholder="https://linkedin.com/in/username"
-                        />
+                        <div className="relative">
+                          <input
+                            type="url"
+                            id="app_linkedin"
+                            value={formData.linkedin_or_portfolio}
+                            onBlur={() => setTouched((prev) => ({ ...prev, linkedin_or_portfolio: true }))}
+                            onChange={(e) => setFormData({ ...formData, linkedin_or_portfolio: e.target.value })}
+                            className={getInputClassName("linkedin_or_portfolio")}
+                            placeholder="https://linkedin.com/in/username"
+                          />
+                          {renderIndicator("linkedin_or_portfolio")}
+                        </div>
                       </div>
 
                       <div>

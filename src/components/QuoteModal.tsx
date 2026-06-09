@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Check, Loader2, Send } from "lucide-react";
+import { X, Check, Loader2, Send, AlertCircle } from "lucide-react";
 import { submitContactFormDirect } from "../firebase";
 
 interface QuoteModalProps {
@@ -22,6 +22,74 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
   const [formState, setFormState] = useState<"idle" | "fetching_tokens" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [prepData, setPrepData] = useState<any>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const isEmailValid = (emailStr: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr.trim());
+  };
+
+  const getValidationState = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const val = formData[field].trim();
+    const isTouched = touched[field] || formState === "error";
+
+    if (field === "full_name") {
+      const isValid = val.length >= 2;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "submitter_email") {
+      const isValid = isEmailValid(val);
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "phone") {
+      if (!val) return "idle";
+      const isValid = val.replace(/\D/g, "").length >= 7;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    if (field === "message") {
+      const isValid = val.length >= 5;
+      if (isValid) return "valid";
+      if (isTouched) return "invalid";
+      return "idle";
+    }
+    return "idle";
+  };
+
+  const getInputClassName = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const state = getValidationState(field);
+    const baseClass = "w-full px-3 py-2 pr-10 border rounded-sm text-sm focus:outline-none transition-all bg-white/40 backdrop-blur-sm focus:bg-white";
+    if (state === "valid") {
+      return `${baseClass} border-emerald-500/80 focus:ring-1 focus:ring-emerald-500/65 focus:border-emerald-500`;
+    }
+    if (state === "invalid") {
+      return `${baseClass} border-red-500/80 focus:ring-1 focus:ring-red-500/65 focus:border-red-500`;
+    }
+    return `${baseClass} border-gray-300/60 focus:ring-1 focus:ring-brand-navy/60 focus:border-brand-navy`;
+  };
+
+  const renderIndicator = (field: "full_name" | "submitter_email" | "phone" | "message") => {
+    const state = getValidationState(field);
+    if (state === "valid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 flex items-center">
+          <Check className="w-4 h-4" />
+        </span>
+      );
+    }
+    if (state === "invalid") {
+      return (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 flex items-center">
+          <AlertCircle className="w-4 h-4" />
+        </span>
+      );
+    }
+    return null;
+  };
 
   // Sync preferredService if modified externally
   useEffect(() => {
@@ -44,6 +112,7 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
     setFormState("idle");
     setErrorMessage("");
     setPrepData(null);
+    setTouched({});
   };
 
   const handleClose = () => {
@@ -188,30 +257,38 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
                   <label htmlFor="quote_name" className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
                     Full Name <span className="text-brand-orange">*</span>
                   </label>
-                  <input
-                    type="text"
-                    id="quote_name"
-                    required
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300/60 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-brand-navy/60 focus:border-brand-navy bg-white/40 backdrop-blur-sm focus:bg-white transition-all"
-                    placeholder="Jane Doe"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="quote_name"
+                      required
+                      value={formData.full_name}
+                      onBlur={() => setTouched((prev) => ({ ...prev, full_name: true }))}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      className={getInputClassName("full_name")}
+                      placeholder="Jane Doe"
+                    />
+                    {renderIndicator("full_name")}
+                  </div>
                 </div>
                 
                 <div>
                   <label htmlFor="quote_email" className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
                     Work Email <span className="text-brand-orange">*</span>
                   </label>
-                  <input
-                    type="email"
-                    id="quote_email"
-                    required
-                    value={formData.submitter_email}
-                    onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300/60 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-brand-navy/60 focus:border-brand-navy bg-white/40 backdrop-blur-sm focus:bg-white transition-all"
-                    placeholder="jane@organization.com"
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      id="quote_email"
+                      required
+                      value={formData.submitter_email}
+                      onBlur={() => setTouched((prev) => ({ ...prev, submitter_email: true }))}
+                      onChange={(e) => setFormData({ ...formData, submitter_email: e.target.value })}
+                      className={getInputClassName("submitter_email")}
+                      placeholder="jane@organization.com"
+                    />
+                    {renderIndicator("submitter_email")}
+                  </div>
                 </div>
               </div>
 
@@ -220,14 +297,18 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
                   <label htmlFor="quote_phone" className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
                     Phone Number
                   </label>
-                  <input
-                    type="tel"
-                    id="quote_phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300/60 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-brand-navy/60 focus:border-brand-navy bg-white/40 backdrop-blur-sm focus:bg-white transition-all"
-                    placeholder="+1 (555) 019-2834"
-                  />
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      id="quote_phone"
+                      value={formData.phone}
+                      onBlur={() => setTouched((prev) => ({ ...prev, phone: true }))}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className={getInputClassName("phone")}
+                      placeholder="+1 (555) 019-2834"
+                    />
+                    {renderIndicator("phone")}
+                  </div>
                 </div>
 
                 <div>
@@ -283,15 +364,19 @@ export default function QuoteModal({ isOpen, onClose, preferredService = "" }: Q
                 <label htmlFor="quote_message" className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
                   Scope Details / Message <span className="text-brand-orange">*</span>
                 </label>
-                <textarea
-                  id="quote_message"
-                  required
-                  rows={3}
-                  value={formData.message}
-                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300/60 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-brand-navy/60 focus:border-brand-navy bg-white/40 backdrop-blur-sm focus:bg-white transition-all"
-                  placeholder="Describe your schedule, volume, target documents, or on-site address context..."
-                />
+                <div className="relative">
+                  <textarea
+                    id="quote_message"
+                    required
+                    rows={3}
+                    value={formData.message}
+                    onBlur={() => setTouched((prev) => ({ ...prev, message: true }))}
+                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                    className={getInputClassName("message")}
+                    placeholder="Describe your schedule, volume, target documents, or on-site address context..."
+                  />
+                  {renderIndicator("message")}
+                </div>
               </div>
 
               <div className="pt-2">
