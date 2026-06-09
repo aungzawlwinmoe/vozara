@@ -77,7 +77,7 @@ export default function Footer() {
               <a href="https://www.facebook.com/vozarals" target="_blank" rel="noreferrer" id="footer-social-fb" className="text-gray-400 hover:text-brand-orange transition-colors duration-200">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="https://twitter.com" target="_blank" rel="noreferrer" id="footer-social-tw" className="text-gray-400 hover:text-brand-orange transition-colors duration-200">
+              <a href="https://x.com/vozarals" target="_blank" rel="noreferrer" id="footer-social-tw" className="text-gray-400 hover:text-brand-orange transition-colors duration-200">
                 <Twitter className="w-5 h-5" />
               </a>
               <a href="https://www.linkedin.com/company/vozarals/" target="_blank" rel="noreferrer" id="footer-social-li" className="text-gray-400 hover:text-brand-orange transition-colors duration-200">
