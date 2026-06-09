@@ -756,16 +756,7 @@ export default function AdminPortalView() {
             </button>
           </form>
 
-          {/* Secure credentials helper for user convenience */}
-          <div className="mt-8 pt-6 border-t border-gray-150 text-center space-y-2.5">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10.5px] font-medium font-mono uppercase">
-              <Info className="w-3.5 h-3.5 shrink-0" /> Local Sandbox Credentials
-            </span>
-            <div className="p-3 bg-[#1B2A6B]/5 border border-[#1B2A6B]/10 rounded-md max-w-sm mx-auto font-mono text-xs text-gray-700 space-y-1">
-              <div>Username: <span className="font-bold text-gray-950 select-all">admin@vozarals.com</span></div>
-              <div>Password: <span className="font-bold text-[#F26522] select-all">admin-sandbox-2026</span></div>
-            </div>
-          </div>
+
         </motion.div>
       </div>
     );
