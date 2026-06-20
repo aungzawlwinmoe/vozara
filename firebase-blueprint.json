@@ -105,6 +105,18 @@
           "type": "string",
           "description": "Cover letter text or notes field"
         },
+        "cv_name": {
+          "type": "string",
+          "description": "CV raw original file name"
+        },
+        "cv_size": {
+          "type": "string",
+          "description": "Formatted file size string"
+        },
+        "cv_base64": {
+          "type": "string",
+          "description": "Base64 representation of resume file payload"
+        },
         "timestamp": {
           "type": "string",
           "description": "ISO date format when saved to database"
@@ -121,6 +133,30 @@
     "/interpreter_submissions/{submissionId}": {
       "schema": "InterpreterSubmission",
       "description": "Collection of recruiter interpreter applications submitted through the career portal"
+    },
+    "/vozarals_settings/{docId}": {
+      "schema": "object",
+      "description": "Enterprise secure credentials configurations"
+    },
+    "/vozarals_announcements/{annId}": {
+      "schema": "object",
+      "description": "Internal broadcasts and compliance statements"
+    },
+    "/vozarals_emails/{emailId}": {
+      "schema": "object",
+      "description": "Real SMTP secure transmission archival logs"
+    },
+    "/vozarals_invitations/{invId}": {
+      "schema": "object",
+      "description": "Authorized tokens of new invitees"
+    },
+    "/vozarals_audit_logs/{logId}": {
+      "schema": "object",
+      "description": "Enterprise server compliance operation history records"
+    },
+    "/vozarals_training/{trainId}": {
+      "schema": "object",
+      "description": "Active onboarding syllabi structure"
     }
   }
 }

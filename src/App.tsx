@@ -36,7 +36,9 @@ import {
   Send, 
   Sparkles, 
   FlameKindling,
-  AlertCircle
+  AlertCircle,
+  Paperclip,
+  Upload
 } from "lucide-react";
 
 // Types and static data parameters
@@ -1569,8 +1571,76 @@ function InterpreterApplyView() {
     technical_setup: "Meets All Requirements",
     availability: "Flexible / Hourly Contract",
     linkedin_or_portfolio: "",
+    cv_name: "",
+    cv_size: "",
+    cv_base64: "",
     additional_info: ""
   });
+
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const handleFileSelection = (file: File) => {
+    if (!file) return;
+    const allowedExtensions = ["pdf", "doc", "docx", "txt"];
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+    if (!fileExt || !allowedExtensions.includes(fileExt)) {
+      setErrorBanner("Unsupported file format. Please upload PDF, Word (.doc/.docx), or text (.txt) files.");
+      setFormState("error");
+      return;
+    }
+    
+    // limit size to 4MB for optimal firebase operations
+    if (file.size > 4 * 1024 * 1024) {
+      setErrorBanner("File size exceeds 4MB load limit. Please compress or select a smaller PDF/Word document.");
+      setFormState("error");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setFormData((prev) => ({
+          ...prev,
+          cv_name: file.name,
+          cv_size: formatFileSize(file.size),
+          cv_base64: e.target!.result as string
+        }));
+        setErrorBanner("");
+      }
+    };
+    reader.onerror = () => {
+      setErrorBanner("Failed to read CV/Résumé file. Please check permissions or try a different file.");
+      setFormState("error");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelection(e.dataTransfer.files[0]);
+    }
+  };
 
   const [formState, setFormState] = useState<"idle" | "getting_tokens" | "submitting" | "success" | "error">("idle");
   const [errorBanner, setErrorBanner] = useState("");
@@ -1744,6 +1814,9 @@ function InterpreterApplyView() {
       technical_setup: "Meets All Requirements",
       availability: "Flexible / Hourly Contract",
       linkedin_or_portfolio: "",
+      cv_name: "",
+      cv_size: "",
+      cv_base64: "",
       additional_info: ""
     });
     setEmailPreviewUrl("");
@@ -2167,6 +2240,86 @@ function InterpreterApplyView() {
                       </div>
 
                       <div>
+                        <label className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1.5 font-mono">
+                          CV / Résumé Attachment <span className="text-white/40 font-sans text-[10px] lowercase italic">&mdash; optional (pdf, doc, docx, txt)</span>
+                        </label>
+                        
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              handleFileSelection(e.target.files[0]);
+                            }
+                          }}
+                          accept=".pdf,.doc,.docx,.txt"
+                          className="hidden"
+                          id="app_cv_upload"
+                        />
+
+                        {formData.cv_name ? (
+                          <div className="bg-[#1b275c] border border-brand-orange/40 rounded-sm p-3.5 flex items-center justify-between gap-3 text-white transition-all">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-10 w-10 shrink-0 bg-brand-orange/15 rounded flex items-center justify-center border border-brand-orange/30 text-brand-orange">
+                                <Paperclip className="w-5 h-5 animate-pulse" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white truncate block tracking-wide" title={formData.cv_name}>
+                                  {formData.cv_name}
+                                </p>
+                                <p className="text-[10px] text-gray-400 font-mono">
+                                  {formData.cv_size} &bull; Loaded
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="px-2.5 py-1 text-[10px] uppercase font-bold text-gray-350 hover:text-white bg-white/5 hover:bg-white/10 rounded-sm transition-colors cursor-pointer border border-white/10"
+                              >
+                                Change
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, cv_name: "", cv_size: "", cv_base64: "" }));
+                                  if (fileInputRef.current) fileInputRef.current.value = "";
+                                }}
+                                className="px-2.5 py-1 text-[10px] uppercase font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-sm transition-colors cursor-pointer border border-red-500/10"
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`border border-dashed rounded-sm p-5 text-center cursor-pointer transition-all duration-200 select-none ${
+                              isDragging
+                                ? "border-brand-orange bg-brand-orange/10 text-white"
+                                : "border-white/15 bg-[#1b275c] hover:border-white/25 text-gray-350 hover:text-white"
+                            }`}
+                          >
+                            <Upload className={`w-7 h-7 mx-auto mb-2 transition-transform ${isDragging ? "scale-110 text-brand-orange" : "text-gray-400"}`} />
+                            <p className="text-xs font-bold uppercase tracking-wider mb-0.5">
+                              Drag & Drop candidate Resume
+                            </p>
+                            <p className="text-[10.5px] text-gray-400 mb-2">
+                              or click to select file
+                            </p>
+                            <div className="inline-block px-2 py-0.5 bg-white/5 border border-white/10 rounded-sm text-[8.5px] font-mono uppercase text-gray-400">
+                              PDF, WORD, or TXT (Max 4MB)
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
                         <label htmlFor="app_additional" className="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-1 font-mono">
                           Brief statement / Cover details
                         </label>
@@ -2191,17 +2344,17 @@ function InterpreterApplyView() {
                         {formState === "getting_tokens" ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Auditing Security Gateway...
+                            SUBMITTING...
                           </>
                         ) : formState === "submitting" ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Delivering Recruiter Dossier...
+                            SUBMITTING...
                           </>
                         ) : (
                           <>
                             <Send className="w-4 h-4" />
-                            SUBMIT APPLICATION
+                            SUBMITTING
                           </>
                         )}
                       </button>

@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { SuiteToolsView } from "./SuiteToolsView";
+import { AdminDashboard } from "./AdminDashboard";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { 
   getContactSubmissionsDirect, 
   getInterpreterSubmissionsDirect, 
-  deleteSubmissionDirect 
-// Note: importing standard firebase functions
+  deleteSubmissionDirect,
+  googleSignIn,
+  logout as googleLogout,
+  getAccessToken,
+  db,
+  handleFirestoreError,
+  OperationType
 } from "../firebase";
+import { onSnapshot, collection, query, addDoc } from "firebase/firestore";
 import { 
   Lock, 
   ShieldAlert, 
@@ -81,6 +88,9 @@ interface InterpreterSubmission {
   availability: string;
   linkedin_or_portfolio: string;
   additional_info: string;
+  cv_name?: string;
+  cv_size?: string;
+  cv_base64?: string;
   timestamp: string;
   email_sandbox_preview?: string;
 }
@@ -118,7 +128,7 @@ export default function AdminPortalView() {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Active Admin Tool Selection
-  const [activeTool, setActiveTool] = useState<"vozara_control" | "suitability_analyzer" | "log_auditor" | "compliance_signatures" | "rate_calculator">("vozara_control");
+  const [activeTool, setActiveTool] = useState<"vozara_control" | "suitability_analyzer" | "log_auditor" | "compliance_signatures" | "rate_calculator" | "compliance_mailbox_portal">("vozara_control");
 
   // State for Candidate Suitability Analyzer
   const [selectedSuiteCandidateId, setSelectedSuiteCandidateId] = useState<string>("");
@@ -202,6 +212,18 @@ export default function AdminPortalView() {
   const [slackTestPayload, setSlackTestPayload] = useState<any | null>(null);
   const [simulatedWebhookSuccess, setSimulatedWebhookSuccess] = useState<boolean>(false);
 
+  // Gmail REST API Connection State
+  const [gmailToken, setGmailToken] = useState<string | null>(null);
+  const [gmailUser, setGmailUser] = useState<{ email: string; name?: string; photo?: string } | null>(null);
+  const [gmailLoading, setGmailLoading] = useState<boolean>(false);
+  const [gmailInboxStats, setGmailInboxStats] = useState<{ totalThreads?: number; messageCount?: number; lastChecked?: string } | null>(null);
+  const [gmailTemplate, setGmailTemplate] = useState<string>("welcome");
+  const [gmailSubject, setGmailSubject] = useState<string>("");
+  const [gmailBody, setGmailBody] = useState<string>("");
+  const [gmailRecipient, setGmailRecipient] = useState<string>("");
+  const [gmailSendStatus, setGmailSendStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [gmailSendResultMsg, setGmailSendResultMsg] = useState<string>("");
+
   // Ref for the logs terminal to always scroll to bottom
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -257,6 +279,20 @@ export default function AdminPortalView() {
     }
   }, []);
 
+  // Sync selected sub email and details with composer template
+  useEffect(() => {
+    if (selectedSub) {
+      setGmailRecipient(selectedSub.submitter_email || "");
+      // Preset templates
+      if (activeTab === "interpreters") {
+        applyGmailTemplate("welcome", selectedSub.full_name, selectedSub);
+      } else {
+        applyGmailTemplate("custom", selectedSub.full_name, selectedSub);
+      }
+      setGmailSendStatus("idle");
+    }
+  }, [selectedSub, activeTab]);
+
   // Sync Timer hook (Auto-Sync Logs implementation)
   useEffect(() => {
     if (autoSync === "off") {
@@ -282,6 +318,110 @@ export default function AdminPortalView() {
 
     return () => clearInterval(countdownInterval);
   }, [autoSync]);
+
+  // Flag to check if we loaded initial records to prevent log duplicate storms on start
+  const isInitialInterpreterLoaded = useRef(false);
+  const isInitialContactLoaded = useRef(false);
+
+  // Real-time Firestore Subscriptions
+  useEffect(() => {
+    if (!isAuthenticated || !db) return;
+
+    pushLog("SYSTEM", "INFO", "Initializing real-time portal telemetry bridges...");
+
+    // 1. Listen for interpreter career applications in real-time
+    const unscInterpreter = onSnapshot(collection(db, "interpreter_submissions"), (snapshot) => {
+      const items: InterpreterSubmission[] = [];
+      snapshot.forEach((snapDoc) => {
+        items.push({ id: snapDoc.id, ...snapDoc.data() } as InterpreterSubmission);
+      });
+      // Sort by timestamp descending
+      items.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+
+      if (isInitialInterpreterLoaded.current) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const data = change.doc.data() as any;
+            pushLog(
+              "INTEGRATION",
+              "SUCCESS",
+              `[REAL-TIME MONITOR] Candidate application submitted: ${data.full_name || "Bilingual Candidate"} (${data.primary_language || "OPI/VRI Specialist"})`
+            );
+          } else if (change.type === "modified") {
+            const data = change.doc.data() as any;
+            pushLog(
+              "DATABASE",
+              "INFO",
+              `[REAL-TIME MONITOR] Candidate portfolio updated: ${data.full_name || "Bilingual Candidate"}`
+            );
+          } else if (change.type === "removed") {
+            pushLog(
+              "DATABASE",
+              "WARN",
+              `[REAL-TIME MONITOR] Candidate application removed from database.`
+            );
+          }
+        });
+      } else {
+        isInitialInterpreterLoaded.current = true;
+      }
+
+      setInterpreters(items);
+      setFirebaseConnected(true);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "interpreter_submissions");
+    });
+
+    // 2. Listen for client lead submissions in real-time
+    const unscContact = onSnapshot(collection(db, "contact_submissions"), (snapshot) => {
+      const items: ContactSubmission[] = [];
+      snapshot.forEach((snapDoc) => {
+        items.push({ id: snapDoc.id, ...snapDoc.data() } as ContactSubmission);
+      });
+      // Sort by timestamp descending
+      items.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+
+      if (isInitialContactLoaded.current) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const data = change.doc.data() as any;
+            pushLog(
+              "DATABASE",
+              "SUCCESS",
+              `[REAL-TIME MONITOR] Client lead request inbound: ${data.full_name || "Enterprise Partner"} (${data.organization || "Private Account"})`
+            );
+          } else if (change.type === "modified") {
+            const data = change.doc.data() as any;
+            pushLog(
+              "DATABASE",
+              "INFO",
+              `[REAL-TIME MONITOR] Client inquiry dossier adjusted: ${data.full_name || "Enterprise Partner"}`
+            );
+          } else if (change.type === "removed") {
+            pushLog(
+              "DATABASE",
+              "WARN",
+              `[REAL-TIME MONITOR] Client inquiry removed from database.`
+            );
+          }
+        });
+      } else {
+        isInitialContactLoaded.current = true;
+      }
+
+      setContacts(items);
+      setFirebaseConnected(true);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "contact_submissions");
+    });
+
+    return () => {
+      unscInterpreter();
+      unscContact();
+      isInitialInterpreterLoaded.current = false;
+      isInitialContactLoaded.current = false;
+    };
+  }, [isAuthenticated]);
 
   // Utility message trigger
   const triggerSystemMessage = (text: string, error = false) => {
@@ -589,11 +729,26 @@ export default function AdminPortalView() {
       availability: "Full-Time (M-F 8 AM - 6 PM EST)",
       linkedin_or_portfolio: "https://linkedin.com/in/" + randomName.toLowerCase().replace(" ", "-"),
       additional_info: randomNote,
+      cv_name: randomName.replace(" ", "_") + "_Resume.pdf",
+      cv_size: `${Math.floor(110 + Math.random() * 140)} KB`,
+      cv_base64: "data:application/pdf;base64,JVBERi0xLjQKJSDi48clCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL01lZGlhQm94IFswIDAgNTk1IDg0Ml0KL1Jlc291cmNlcyA8PAovRm9udCA8PAovRjEgNCAwIFIKPj4KPj4KL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQo+PgplbmRvYmoKNSAwIG9iago8PAovTGVuZ3RoIDY5Cj4+CnN0cmVhbQpCVAovRjEgMjQgVGYKOTAgNzAwIFRkCihWb3phcmEgTGFuZ3VhZ2UgU2VydmljZXMgLSBDYW5kaWRhdGUgUmVzdW1lKSBUagogRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTggMDAwMDAgbiAKMDAwMDAwMDA2OSAwMDAwMCBuIAowMDAwMDAwMTI3IDAwMDAwIGYgCjAwMDAwMDAyNjEgMDAwMDAgbiAKMDAwMDAwMDMzOCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjQ1OAolJUVPRgo=",
       timestamp: new Date().toISOString()
     };
 
-    setInterpreters(prev => [simulatedCandidate, ...prev]);
-    pushLog("DATABASE", "SUCCESS", `Simulated Recruits Inbound: ${randomName} (${randomLang}) applied from ${randomLoc}.`);
+    const isStaticMode = sessionStorage.getItem("vozara_static_fallback") === "true";
+    if (!isStaticMode && db) {
+      const { id, ...persistedPayload } = simulatedCandidate;
+      addDoc(collection(db, "interpreter_submissions"), persistedPayload)
+        .then((docRef) => {
+          pushLog("DATABASE", "SUCCESS", `Simulated Recruits Inbound: ${randomName} persisted to Cloud Firestore (${docRef.id}).`);
+        })
+        .catch((err) => {
+          handleFirestoreError(err, OperationType.WRITE, "interpreter_submissions");
+        });
+    } else {
+      setInterpreters(prev => [simulatedCandidate, ...prev]);
+      pushLog("DATABASE", "SUCCESS", `Simulated Recruits Inbound: ${randomName} (${randomLang}) applied from ${randomLoc} (static cache).`);
+    }
     
     // Trigger integration notification test
     if (integrations.slackEnabled) {
@@ -634,6 +789,206 @@ export default function AdminPortalView() {
       setSlackTestModalOpen(false);
       setSimulatedWebhookSuccess(false);
     }, 2500);
+  };
+
+  // Google Workspaces Gmail REST API Integration Helpers
+  const handleConnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      pushLog("AUTH", "INFO", "Initiating modern Workspace OAuth consent handshake for Gmail gateway...");
+      const result = await googleSignIn();
+      if (result) {
+        setGmailToken(result.accessToken);
+        setGmailUser({
+          email: result.user.email || "unknown@gmail.com",
+          name: result.user.displayName || undefined,
+          photo: result.user.photoURL || undefined
+        });
+        pushLog("AUTH", "SUCCESS", `Gmail REST API gateway established for admin: ${result.user.email}`);
+        
+        // Fetch diagnostic stats
+        await fetchGmailDiagStats(result.accessToken);
+        triggerSystemMessage("Google Gmail workspace synced.");
+      }
+    } catch (err: any) {
+      pushLog("AUTH", "CRITICAL", `OAuth handshakes failed: ${err.message || err}`);
+      triggerSystemMessage("Gmail OAuth request declined.", true);
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      await googleLogout();
+      setGmailToken(null);
+      setGmailUser(null);
+      setGmailInboxStats(null);
+      pushLog("AUTH", "WARN", "Gmail dispatch gateway disconnected.");
+      triggerSystemMessage("Google services decoupled.");
+    } catch (err: any) {
+      console.error("Disconnect error:", err);
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const fetchGmailDiagStats = async (token: string) => {
+    try {
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const profile = await res.json();
+        setGmailInboxStats({
+          messageCount: profile.messagesTotal,
+          totalThreads: profile.threadsTotal,
+          lastChecked: new Date().toLocaleTimeString()
+        });
+        pushLog("INTEGRATION", "SUCCESS", `Retrieved Gmail Diagnostics. Inbox message count: ${profile.messagesTotal}`);
+      } else {
+        const errorText = await res.text();
+        console.warn("Gmail Stats failed:", errorText);
+      }
+    } catch (err) {
+      console.error("Error fetching diagnostics profile:", err);
+    }
+  };
+
+  const applyGmailTemplate = (templateName: string, candidateName: string, details?: any) => {
+    setGmailTemplate(templateName);
+    const firstName = candidateName.split(" ")[0] || "there";
+    
+    if (templateName === "welcome") {
+      setGmailSubject(`Vozara Interpreter Onboarding: Next Steps for ${firstName}`);
+      setGmailBody(`
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <span style="font-size: 24px; font-weight: bold; color: #1B2A6B; letter-spacing: 1px;">VOZARA</span>
+    <span style="font-size: 24px; font-weight: bold; color: #F26522; letter-spacing: 1px;">LINGUISTICS</span>
+  </div>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Dear <strong>${candidateName}</strong>,</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Thank you for your application to join our specialist interpreter panel. We have reviewed your qualifications and experienced background in <strong>${details?.primary_language || "Specialist Languages"}</strong>.</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">We would love to onboard you to our active dispatch queue! The next step is a quick software orientation and hardware isolation test. Please let us know your general availability for this week.</p>
+  <div style="background-color: #f8fafc; padding: 16px; border-left: 4px solid #F26522; margin: 20px 0; border-radius: 4px;">
+    <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; color: #1B2A6B; letter-spacing: 0.5px; font-weight: bold;">Onboarding Checkup Scope</h4>
+    <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">Active noise block level check, audio isolation verification (-15dB target isolation), HIPAA compliance walkthrough, and custom software client configuration.</p>
+  </div>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">We look forward to translating bridges of trust together!</p>
+  <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 24px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center;">Vozara Language Services LLC &bull; 500 Corporate Circle &bull; On-Demand Recruiting</p>
+</div>
+      `.trim());
+    } else if (templateName === "interview") {
+      setGmailSubject(`Interview Invitation: Vozara Professional Panel for ${firstName}`);
+      setGmailBody(`
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <h2 style="margin: 0; color: #1B2A6B; font-weight: 800; font-size: 20px; letter-spacing: 0.5px;">VOZARA AUDITION BOARD</h2>
+  </div>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${candidateName}</strong>,</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Your impressive credentials demonstrate excellent capacity for consecutive and simultaneous translation services for <strong>${details?.primary_language || "Specialist Languages"}</strong>.</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">We would like to invite you for a <strong>30-minute technical evaluation</strong> conducted via Zoom secure video conferencing. We will test consecutive and remote simultaneous software drills.</p>
+  <p style="font-size: 15px; line-height: 1.6; text-align: center; margin: 28px 0;">
+    <a href="https://calendly.com/vozara-sandbox" style="background-color: #1B2A6B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">Select Interview Time Spot</a>
+  </p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Please bring your professional credentials list and photographic ID. Thank you!</p>
+  <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 24px 0;" />
+  <p style="font-size: 11px; color: #94a3b8; text-align: center;">Best regards,<br/>The Vozara Recruiting Panel</p>
+</div>
+      `.trim());
+    } else if (templateName === "documentation") {
+      setGmailSubject(`Vozara Application Status: Pending Proof of Certifications`);
+      setGmailBody(`
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${candidateName}</strong>,</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Thank you for submitting your application to Vozara Language Services. We are excited about your credentials!</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">During our assessment we noticed the certification field needs supportive documentation. Could you please reply directly to this mail with copy scans or certificates for your registered credentials or background compliance checks?</p>
+  <p style="font-size: 15px; line-height: 1.6; color: #334155;">Once received, our compliance team will complete your validation in our active credentials registry.</p>
+  <p style="font-size: 14px; color: #475569; margin-top: 24px;">Best regards,<br/>Vozara Credentials Verification Hub</p>
+</div>
+      `.trim());
+    } else {
+      setGmailSubject("");
+      setGmailBody(`
+<div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333333;">
+  <p>Dear ${candidateName},</p>
+  <p>[Write your custom message here]</p>
+  <p>Best regards,<br/>Vozara Admin Panel</p>
+</div>
+      `.trim());
+    }
+  };
+
+  const sendComposeGmail = async () => {
+    if (!gmailToken) {
+      triggerSystemMessage("Please connect your Gmail account first.", true);
+      return;
+    }
+    if (!gmailRecipient) {
+      triggerSystemMessage("Please provide a recipient email.", true);
+      return;
+    }
+    if (!gmailSubject) {
+      triggerSystemMessage("Please enter a subject line.", true);
+      return;
+    }
+    if (!gmailBody) {
+      triggerSystemMessage("Please write some message body.", true);
+      return;
+    }
+
+    setGmailSendStatus("sending");
+    setGmailSendResultMsg("");
+    
+    try {
+      pushLog("INTEGRATION", "INFO", `Generating MIME envelope to dispatch email to: ${gmailRecipient}...`);
+      
+      const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(gmailSubject)))}?=`;
+      const emailLines = [
+        `To: ${gmailRecipient}`,
+        `Subject: ${utf8Subject}`,
+        'Content-Type: text/html; charset=utf-8',
+        'MIME-Version: 1.0',
+        '',
+        gmailBody
+      ];
+      const email = emailLines.join('\r\n');
+      
+      // Base64URL encode
+      const base64 = btoa(unescape(encodeURIComponent(email)));
+      const rawPayload = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${gmailToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ raw: rawPayload })
+      });
+
+      if (res.ok) {
+        const responseData = await res.json();
+        setGmailSendStatus("success");
+        setGmailSendResultMsg(`Message successfully dispatched! ID: ${responseData.id}`);
+        pushLog("INTEGRATION", "SUCCESS", `Email successfully sent via Gmail API to candidate/contact: ${gmailRecipient}. Message ID: ${responseData.id}`);
+        triggerSystemMessage("Gmail successfully sent.");
+        
+        // Refresh diagnostics statistics
+        fetchGmailDiagStats(gmailToken);
+      } else {
+        const errorData = await res.json();
+        setGmailSendStatus("error");
+        setGmailSendResultMsg(`Gmail API error: ${errorData.error?.message || JSON.stringify(errorData)}`);
+        pushLog("INTEGRATION", "WARN", `Gmail dispatch failed: ${errorData.error?.message || "Unknown API response"}`);
+      }
+    } catch (err: any) {
+      setGmailSendStatus("error");
+      setGmailSendResultMsg(`SMTP local fallback error: ${err.message || err}`);
+      pushLog("INTEGRATION", "CRITICAL", `Failed to compile or submit MIME package: ${err.message || err}`);
+    }
   };
 
   // Searching tables
@@ -902,7 +1257,7 @@ export default function AdminPortalView() {
                   id="tool-select-suitability"
                   onClick={() => {
                     setActiveTool("suitability_analyzer");
-                    pushLog("SYSTEM", "INFO", "Switched active tool context to CANDIDATE SUITABILITY ANALYZER");
+                    pushLog("SYSTEM", "INFO", "Switched active tool context to LINGUIST SUITABILITY & MATCH ENGINE");
                   }}
                   className={`w-full text-left p-3.5 rounded-lg border transition-all duration-200 cursor-pointer flex items-start gap-3 ${
                     activeTool === "suitability_analyzer"
@@ -912,8 +1267,8 @@ export default function AdminPortalView() {
                 >
                   <Sliders className={`w-5 h-5 mt-0.5 shrink-0 ${activeTool === "suitability_analyzer" ? "text-[#F26522]" : "text-gray-400"}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="font-serif text-sm font-semibold">Suitability Matcher</div>
-                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Review and rank candidate qualifications.</p>
+                    <div className="font-serif text-sm font-semibold">Linguist Suitability &amp; Match Engine</div>
+                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Review ATS score index and rank qualifications in real-time.</p>
                   </div>
                 </button>
 
@@ -923,7 +1278,7 @@ export default function AdminPortalView() {
                   id="tool-select-logs"
                   onClick={() => {
                     setActiveTool("log_auditor");
-                    pushLog("SYSTEM", "INFO", "Switched active tool context to PROCESS LOGGER TERMINAL");
+                    pushLog("SYSTEM", "INFO", "Switched active tool context to OPERATIONS TELEMETER LOGGING SYSTEM");
                   }}
                   className={`w-full text-left p-3.5 rounded-lg border transition-all duration-205 cursor-pointer flex items-start gap-3 ${
                     activeTool === "log_auditor"
@@ -933,8 +1288,8 @@ export default function AdminPortalView() {
                 >
                   <Terminal className={`w-5 h-5 mt-0.5 shrink-0 ${activeTool === "log_auditor" ? "text-[#F26522]" : "text-gray-400"}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="font-serif text-sm font-semibold">Telemetry LogStream</div>
-                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Monitor internal memory logs and server signals.</p>
+                    <div className="font-serif text-sm font-semibold">Operations Telemeter Logging System</div>
+                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Monitor server signals, memory logs, and sync channels.</p>
                   </div>
                 </button>
 
@@ -965,7 +1320,7 @@ export default function AdminPortalView() {
                   id="tool-select-ratecalc"
                   onClick={() => {
                     setActiveTool("rate_calculator");
-                    pushLog("SYSTEM", "INFO", "Switched active tool context to RATE INDEX MATRIX CALCULATOR");
+                    pushLog("SYSTEM", "INFO", "Switched active tool context to REMOTE RATE MATRIX & BID CALCULATOR");
                   }}
                   className={`w-full text-left p-3.5 rounded-lg border transition-all duration-215 cursor-pointer flex items-start gap-3 ${
                     activeTool === "rate_calculator"
@@ -975,8 +1330,29 @@ export default function AdminPortalView() {
                 >
                   <Sliders className={`w-5 h-5 mt-0.5 shrink-0 rotate-90 ${activeTool === "rate_calculator" ? "text-[#F26522]" : "text-gray-400"}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="font-serif text-sm font-semibold">Rate Matrix Estimator</div>
-                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Calculate enterprise quotes and payout split scenarios.</p>
+                    <div className="font-serif text-sm font-semibold">Remote Rate Matrix &amp; Bid Calculator</div>
+                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Estimate enterprise quotes and payout split scenarios dynamically.</p>
+                  </div>
+                </button>
+
+                {/* TOOL 6: VOZARALS COMPLIANCE & MAILBOX HUB PORTAL */}
+                <button
+                  type="button"
+                  id="tool-select-mailboxportal"
+                  onClick={() => {
+                    setActiveTool("compliance_mailbox_portal");
+                    pushLog("SYSTEM", "INFO", "Switched active tool context to VOZARALS COMPLIANCE & MAILBOX HUB PORTAL");
+                  }}
+                  className={`w-full text-left p-3.5 rounded-lg border transition-all duration-220 cursor-pointer flex items-start gap-3 ${
+                    activeTool === "compliance_mailbox_portal"
+                      ? "bg-[#1B2A6B]/5 border-[#1B2A6B] text-[#1B2A6B] font-bold shadow-sm"
+                      : "bg-white hover:bg-gray-50 border-gray-200 text-gray-600"
+                  }`}
+                >
+                  <Mail className={`w-5 h-5 mt-0.5 shrink-0 ${activeTool === "compliance_mailbox_portal" ? "text-[#F26522]" : "text-gray-400"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-serif text-sm font-bold font-semibold text-[#1B2A6B]">Compliance &amp; Mailbox Hub</div>
+                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Regulatory on boarding directory, One.com email gateway, and audits.</p>
                   </div>
                 </button>
               </div>
@@ -985,12 +1361,20 @@ export default function AdminPortalView() {
 
           {/* RIGHT SIDE ACTIVE OPERATIONS AREA (9 columns) */}
           <div className="lg:col-span-9 space-y-8">
-            {activeTool !== "vozara_control" ? (
+            {activeTool === "compliance_mailbox_portal" ? (
+              <AdminDashboard
+                interpreters={interpreters}
+                contacts={contacts}
+                logs={logs}
+                pushLog={pushLog}
+                triggerSystemMessage={triggerSystemMessage}
+              />
+            ) : activeTool !== "vozara_control" ? (
               <SuiteToolsView
                 interpreters={interpreters}
                 contacts={contacts}
                 antispamSessions={antispamSessions}
-                activeTool={activeTool}
+                activeTool={activeTool as any}
                 logs={logs}
                 pushLog={pushLog}
                 triggerSystemMessage={triggerSystemMessage}
@@ -1405,52 +1789,54 @@ export default function AdminPortalView() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                      <div className="space-y-4 border border-gray-200 p-5 rounded-lg bg-white shadow-sm">
-                        <h3 className="text-xs uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono flex items-center gap-2">
-                          <Sliders className="w-4 h-4 text-[#F26522]" /> Webhook Config Integration
-                        </h3>
-                        <div className="h-px bg-gray-150 w-full" />
-                        
-                        <div className="space-y-1">
-                          <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+                      <div className="space-y-4 border border-gray-200 p-5 rounded-lg bg-white shadow-sm flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <h3 className="text-xs uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono flex items-center gap-2">
+                            <Sliders className="w-4 h-4 text-[#F26522]" /> Webhook Config Integration
+                          </h3>
+                          <div className="h-px bg-gray-150 w-full" />
+                          
+                          <div className="space-y-1">
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={integrations.slackEnabled}
+                                onChange={(e) => saveIntegrations({ ...integrations, slackEnabled: e.target.checked })}
+                                className="rounded border-gray-300 focus:ring-0 cursor-pointer"
+                              />
+                              Enable Slack Channel Relay
+                            </label>
+                            <p className="text-[10px] text-gray-400 pl-5">Automatically format and send leads to Slack workspace webhook</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label htmlFor="int_slack_url" className="text-[10.5px] uppercase font-bold tracking-wider text-gray-550 block font-mono">Slack Webhook Destination URL</label>
                             <input
-                              type="checkbox"
-                              checked={integrations.slackEnabled}
-                              onChange={(e) => saveIntegrations({ ...integrations, slackEnabled: e.target.checked })}
-                              className="rounded border-gray-300 focus:ring-0 cursor-pointer"
+                              id="int_slack_url"
+                              type="text"
+                              value={integrations.slackWebhook}
+                              onChange={(e) => setIntegrations({ ...integrations, slackWebhook: e.target.value })}
+                              className="w-full bg-gray-50 border border-gray-200 text-xs rounded p-2.5 font-mono text-gray-800 outline-none focus:border-[#1B2A6B]"
                             />
-                            Enable Slack Channel Relay
-                          </label>
-                          <p className="text-[10px] text-gray-400 pl-5">Automatically format and send leads to Slack workspace webhook</p>
-                        </div>
+                          </div>
 
-                        <div className="space-y-2">
-                          <label htmlFor="int_slack_url" className="text-[10.5px] uppercase font-bold tracking-wider text-gray-550 block font-mono">Slack Webhook Destination URL</label>
-                          <input
-                            id="int_slack_url"
-                            type="text"
-                            value={integrations.slackWebhook}
-                            onChange={(e) => setIntegrations({ ...integrations, slackWebhook: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 text-xs rounded p-2.5 font-mono text-gray-800 outline-none focus:border-[#1B2A6B]"
-                          />
-                        </div>
-
-                        <div className="space-y-2 pt-2">
-                          <label htmlFor="int_websec" className="text-[10.5px] uppercase font-bold tracking-wider text-gray-550 block font-mono">Webhook Security Sign Secret Signature</label>
-                          <input
-                            id="int_websec"
-                            type="text"
-                            value={integrations.webhookSecret}
-                            onChange={(e) => setIntegrations({ ...integrations, webhookSecret: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 text-xs rounded p-2.5 font-mono text-gray-850 outline-none focus:border-[#1B2A6B]"
-                          />
+                          <div className="space-y-2 pt-2">
+                            <label htmlFor="int_websec" className="text-[10.5px] uppercase font-bold tracking-wider text-gray-550 block font-mono">Webhook Security Sign Secret Signature</label>
+                            <input
+                              id="int_websec"
+                              type="text"
+                              value={integrations.webhookSecret}
+                              onChange={(e) => setIntegrations({ ...integrations, webhookSecret: e.target.value })}
+                              className="w-full bg-gray-50 border border-gray-200 text-xs rounded p-2.5 font-mono text-gray-850 outline-none focus:border-[#1B2A6B]"
+                            />
+                          </div>
                         </div>
 
                         <button
                           type="button"
                           onClick={() => saveIntegrations(integrations)}
-                          className="w-full py-2 bg-[#1B2A6B] hover:bg-[#283D90] text-white font-bold rounded text-[10.5px] uppercase tracking-wider hover:cursor-pointer transition-colors"
+                          className="w-full py-2 bg-[#1B2A6B] hover:bg-[#283D90] text-white font-bold rounded text-[10.5px] uppercase tracking-wider hover:cursor-pointer transition-colors mt-4"
                         >
                           Commit Webhook Configurations
                         </button>
@@ -1499,6 +1885,144 @@ export default function AdminPortalView() {
                             />
                             Email alert for Client Leads
                           </label>
+                        </div>
+                      </div>
+
+                      {/* GMAIL API SYSTEM GATEWAY CARD */}
+                      <div className="space-y-4 border border-gray-200 p-5 rounded-lg bg-white shadow-sm flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <h3 className="text-xs uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-[#F26522]" /> google gmail gateway
+                          </h3>
+                          <div className="h-px bg-gray-150 w-full" />
+
+                          {gmailToken ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 border border-emerald-100 rounded-md">
+                                {gmailUser?.photo ? (
+                                  <img 
+                                    src={gmailUser.photo} 
+                                    alt="Google Profile" 
+                                    className="w-10 h-10 rounded-full border border-emerald-250 shrink-0"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm uppercase shrink-0">
+                                    {(gmailUser?.name || gmailUser?.email || "G")[0]}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-xs text-gray-800 truncate">{gmailUser?.name || "Workspace Admin"}</div>
+                                  <div className="text-[10px] text-gray-500 truncate font-mono">{gmailUser?.email}</div>
+                                  <span className="inline-flex items-center gap-1 text-[9px] bg-emerald-150/40 text-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold mt-1 uppercase">
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Active Session
+                                  </span>
+                                </div>
+                              </div>
+
+                              {gmailInboxStats && (
+                                <div className="p-2 bg-gray-50 rounded border border-gray-150 grid grid-cols-2 gap-1.5 text-center text-gray-700">
+                                  <div>
+                                    <div className="text-[9px] uppercase tracking-wider text-gray-400 font-mono select-none">Total Messages</div>
+                                    <div className="text-xs font-black text-gray-900 font-mono mt-0.5">{gmailInboxStats.messageCount ?? "N/A"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-[9px] uppercase tracking-wider text-gray-400 font-mono select-none">Total Threads</div>
+                                    <div className="text-xs font-black text-gray-900 font-mono mt-0.5">{gmailInboxStats.totalThreads ?? "N/A"}</div>
+                                  </div>
+                                  <div className="col-span-2 text-[8px] text-gray-400 border-t border-gray-100 pt-1 mt-0.5 font-mono text-center select-none">
+                                    Verified: {gmailInboxStats.lastChecked}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Mini Test Dispatcher Console */}
+                              <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-md space-y-2">
+                                <div className="text-[9.5px] font-bold text-[#1B2A6B] uppercase tracking-widest font-mono flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" /> REST Dispatch Sandbox
+                                </div>
+                                <div className="space-y-1.5">
+                                  <input 
+                                    type="email" 
+                                    value={gmailRecipient} 
+                                    onChange={(e) => setGmailRecipient(e.target.value)}
+                                    placeholder="Enter test recipe email..." 
+                                    className="w-full bg-white border border-gray-200 text-[10.5px] rounded p-1.5 font-mono outline-none focus:border-[#1B2A6B]"
+                                  />
+                                  <input 
+                                    type="text" 
+                                    value={gmailSubject} 
+                                    onChange={(e) => setGmailSubject(e.target.value)}
+                                    placeholder="Subject header line..." 
+                                    className="w-full bg-white border border-gray-200 text-[10.5px] rounded p-1.5 outline-none focus:border-[#1B2A6B]"
+                                  />
+                                  <textarea 
+                                    value={gmailBody} 
+                                    onChange={(e) => setGmailBody(e.target.value)}
+                                    placeholder="MIME message content body..." 
+                                    className="w-full h-12 bg-white border border-gray-200 text-[10.5px] rounded p-1.5 font-mono outline-none focus:border-[#1B2A6B] resize-none"
+                                  />
+                                </div>
+
+                                {gmailSendStatus !== "idle" && (
+                                  <div className={`p-1.5 rounded text-[9.5px] leading-normal font-mono ${
+                                    gmailSendStatus === "sending" ? "bg-blue-50 text-blue-700 border border-blue-150" :
+                                    gmailSendStatus === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-150" :
+                                    "bg-red-50 text-red-700 border border-red-150 animate-pulse"
+                                  }`}>
+                                    {gmailSendStatus === "sending" && "Forwarding payload to REST gateway..."}
+                                    {gmailSendStatus === "success" && (gmailSendResultMsg || "Transmitted successfully!")}
+                                    {gmailSendStatus === "error" && (gmailSendResultMsg || "Error transmitting payload.")}
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  disabled={gmailLoading || gmailSendStatus === "sending"}
+                                  onClick={sendComposeGmail}
+                                  className="w-full py-1.5 bg-[#F26522] hover:bg-[#d45017] disabled:bg-gray-300 text-white font-bold rounded text-[9.5px] uppercase tracking-wider duration-150 cursor-pointer font-mono"
+                                >
+                                  {gmailSendStatus === "sending" ? "Sending..." : "Dispatch SMTP-REST packet"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 pt-1">
+                              <p className="text-[11px] text-gray-500 leading-relaxed">
+                                Link this management terminal directly with Google Workspace to dispatch authentic candidate responses, onboarding packages, and interview offers via your actual corporate Gmail address.
+                              </p>
+                              
+                              <div className="bg-[#1B2A6B]/5 border border-[#1B2A6B]/10 p-2.5 rounded text-[10px] text-[#1B2A6B] flex items-start gap-1.5 leading-relaxed">
+                                <Info className="w-3.5 h-3.5 text-[#F26522] mt-0.5 shrink-0" />
+                                <span>Uses official direct OAuth pathways inside secure sandboxed iFrame. Sensitive credentials remain transiently in memory.</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-4">
+                          {gmailToken ? (
+                            <button
+                              type="button"
+                              disabled={gmailLoading}
+                              onClick={handleDisconnectGmail}
+                              className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-red-600 border border-gray-250 font-bold rounded text-[10.5px] uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 hover:cursor-pointer font-mono"
+                            >
+                              <LogOut className="w-3.5 h-3.5" /> disconnect gmail node
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={gmailLoading}
+                              onClick={handleConnectGmail}
+                              className="w-full py-2 bg-[#1B2A6B] hover:bg-[#283D90] disabled:bg-gray-300 text-white font-bold rounded text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm hover:cursor-pointer"
+                            >
+                              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                                <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114A5.903 5.903 0 018 12.63c0-3.26 2.64-5.9 5.9-5.9 1.48 0 2.83.55 3.87 1.46l3.07-3.07C18.98 3.37 16.58 2.43 13.9 2.43 8.3 2.43 3.77 6.96 3.77 12.56s4.53 10.13 10.13 10.13c5.8 0 9.6-4.07 9.6-9.76 0-.66-.06-1.3-.17-1.95H12.24z"/>
+                              </svg>
+                              {gmailLoading ? "Authorizing Popups..." : "Connect Admin Gmail Account"}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1632,7 +2156,7 @@ export default function AdminPortalView() {
                         </p>
                       </div>
 
-                      {selectedSub.linkedin_or_portfolio && (
+                       {selectedSub.linkedin_or_portfolio && (
                         <div>
                           <span className="text-[#1B2A6B] block uppercase font-bold text-[9px] tracking-wider mb-1">Dossier Portfolio Link</span>
                           <a 
@@ -1644,6 +2168,49 @@ export default function AdminPortalView() {
                             <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                             {selectedSub.linkedin_or_portfolio}
                           </a>
+                        </div>
+                      )}
+
+                      {selectedSub.cv_name && (
+                        <div className="space-y-1">
+                          <span className="text-[#1B2A6B] block uppercase font-bold text-[9px] tracking-wider mb-1">Attached CV / Résumé</span>
+                          <div className="bg-gray-55/60 border border-gray-200 p-3 rounded-lg flex items-center justify-between gap-3 font-sans">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="h-10 w-10 rounded bg-[#F26522]/10 text-[#F26522] flex items-center justify-center shrink-0 border border-[#F26522]/20">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-gray-900 truncate" title={selectedSub.cv_name}>
+                                  {selectedSub.cv_name}
+                                </p>
+                                <p className="text-[10px] text-gray-500 font-mono">
+                                  {selectedSub.cv_size || "Unknown size"} &bull; Document File
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedSub.cv_base64) {
+                                  const link = document.createElement("a");
+                                  link.href = selectedSub.cv_base64.startsWith("data:") 
+                                    ? selectedSub.cv_base64 
+                                    : `data:application/pdf;base64,${selectedSub.cv_base64}`;
+                                  link.download = selectedSub.cv_name || "Resume.pdf";
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  pushLog("SYSTEM", "SUCCESS", `Downloaded candidate resume: ${selectedSub.cv_name}`);
+                                } else {
+                                  pushLog("SYSTEM", "WARN", "CV base64 payload is empty or corrupted.");
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-[#1B2A6B] hover:brightness-110 text-white font-bold text-[10px] uppercase tracking-wide rounded hover:cursor-pointer transition-all shadow-sm whitespace-nowrap shrink-0 flex items-center gap-1 font-mono"
+                            >
+                              Download CV
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -1722,6 +2289,123 @@ export default function AdminPortalView() {
                       </div>
                     </div>
                   )}
+
+                  {/* DIRECT RECRUITER CORRESPONDENCE GMAIL GATEWAY */}
+                  <div className="pt-5 border-t border-gray-200 space-y-3">
+                    <h4 className="text-[10px] uppercase font-bold tracking-widest text-[#1B2A6B] font-mono flex items-center gap-1.5 select-none">
+                      <Mail className="w-3.5 h-3.5 text-[#F26522]" /> Recruiter Gmail Correspondence
+                    </h4>
+                    
+                    {gmailToken ? (
+                      <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="dossier_comp_temp" className="text-[10px] uppercase font-extrabold text-gray-500 font-mono">Select Email Template</label>
+                          <span className="text-[9px] text-emerald-800 font-mono bg-emerald-50 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                            Connected as {gmailUser?.email}
+                          </span>
+                        </div>
+                        
+                        <select 
+                          id="dossier_comp_temp"
+                          value={gmailTemplate}
+                          onChange={(e) => applyGmailTemplate(e.target.value, selectedSub.full_name, selectedSub)}
+                          className="w-full bg-white border border-gray-200 text-xs rounded p-2 text-gray-700 font-sans outline-none focus:border-[#1B2A6B]"
+                        >
+                          <option value="welcome">Welcome & Hardware Checkup (Interpreter onboarding)</option>
+                          <option value="interview">1-on-1 Audition Invitation (Zoom interview slots)</option>
+                          <option value="documentation">Documentation Pending Notification (Credentials verification)</option>
+                          <option value="custom">Blank Canvas (Custom Message)</option>
+                        </select>
+
+                        <div className="space-y-2">
+                          <div>
+                            <label htmlFor="dossier_comp_to" className="text-[9.5px] font-bold text-gray-500 block mb-1 uppercase font-mono">Recipient Email</label>
+                            <input 
+                              id="dossier_comp_to"
+                              type="email" 
+                              value={gmailRecipient}
+                              onChange={(e) => setGmailRecipient(e.target.value)}
+                              className="w-full bg-white border border-gray-200 text-xs rounded p-2 font-mono text-gray-800 outline-none focus:border-[#1B2A6B]"
+                              placeholder="candidate@email.com"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="dossier_comp_subj" className="text-[9.5px] font-bold text-gray-500 block mb-1 uppercase font-mono">Subject Header</label>
+                            <input 
+                              id="dossier_comp_subj"
+                              type="text" 
+                              value={gmailSubject}
+                              onChange={(e) => setGmailSubject(e.target.value)}
+                              className="w-full bg-white border border-gray-200 text-xs rounded p-2 text-gray-850 font-sans font-semibold outline-none focus:border-[#1B2A6B]"
+                              placeholder="Application update..."
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label htmlFor="dossier_comp_body" className="text-[9.5px] font-bold text-gray-500 uppercase font-mono">HTML Message Body</label>
+                              <span className="text-[9.5px] text-gray-400 italic">Supports HTML layouts</span>
+                            </div>
+                            <textarea 
+                              id="dossier_comp_body"
+                              value={gmailBody}
+                              onChange={(e) => setGmailBody(e.target.value)}
+                              className="w-full h-44 bg-white border border-gray-201 text-xs rounded p-2.5 font-mono text-gray-800 outline-none focus:border-[#1B2A6B] resize-y"
+                              placeholder="Dear Candidate..."
+                            />
+                          </div>
+                        </div>
+
+                        {gmailSendStatus !== "idle" && (
+                          <div className={`p-3 rounded-md text-xs leading-relaxed font-mono ${
+                            gmailSendStatus === "sending" ? "bg-blue-50 text-blue-800 border border-blue-200 animate-pulse" :
+                            gmailSendStatus === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" :
+                            "bg-red-50 text-red-800 border border-red-200"
+                          }`}>
+                            {gmailSendStatus === "sending" && (
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                Transmitting MIME package over secure REST gateway...
+                              </div>
+                            )}
+                            {gmailSendStatus === "success" && (
+                              <div className="space-y-1">
+                                <div className="font-bold flex items-center gap-1.5 text-emerald-750">
+                                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Message dispatched successfully!
+                                </div>
+                                <p className="text-[10px] text-emerald-600">{gmailSendResultMsg}</p>
+                              </div>
+                            )}
+                            {gmailSendStatus === "error" && (
+                              <div className="space-y-1">
+                                <div className="font-bold text-red-750">Transmission failure!</div>
+                                <p className="text-[10px] text-red-600">{gmailSendResultMsg}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={gmailLoading || gmailSendStatus === "sending"}
+                          onClick={sendComposeGmail}
+                          className="w-full py-2.5 bg-[#F26522] hover:bg-[#d45017] disabled:bg-gray-300 text-white font-bold rounded text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2 hover:cursor-pointer shadow-sm font-mono"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          {gmailSendStatus === "sending" ? "Transmitting..." : "Send via connected Gmail"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-gray-250 p-4 rounded-lg bg-gray-50/50 text-center space-y-2 select-none">
+                        <Mail className="w-8 h-8 text-gray-300 mx-auto" />
+                        <div className="text-xs font-bold text-gray-600">recruiter email correspondence offline</div>
+                        <p className="text-[10.5px] text-gray-400 max-w-sm mx-auto leading-relaxed">
+                          Link your Google Workspace Gmail account in the <strong className="text-[#1B2A6B] font-extrabold hover:underline cursor-pointer" onClick={() => setActiveTab("integrations")}>Integrations</strong> tab to instantly compose & dispatch custom answers, Zoom auditions, and checks directly from this screen.
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
                 </div>
 

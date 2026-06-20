@@ -76,3 +76,39 @@ export interface FormPrepareResponse {
     _anti_bot_timestamp: string;
   };
 }
+
+export type MailboxFolder = "inbox" | "sent";
+
+export interface MailMessage {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  timestamp: string;
+  body: string; // Plain-text or HTML body
+  isRead: boolean;
+  folder: MailboxFolder;
+}
+
+export type InvitationStatus = "Active" | "Sent" | "Pending";
+
+export interface InvitationState {
+  id: string;
+  candidateName: string;
+  email: string;
+  role: string;
+  status: InvitationStatus;
+  templateUsed: string;
+  sentAt?: string;
+}
+
+export interface AuditRecord {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userEmail: string;
+  action: string;
+  severity: "INFO" | "WARN" | "CRITICAL";
+  details: string;
+}
+

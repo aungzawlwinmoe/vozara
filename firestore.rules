@@ -17,5 +17,30 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read, write: if true;
     }
+
+    // Vozarals custom backend persistent tables (accessed by Express backend server)
+    match /vozarals_settings/{docId} {
+      allow read, write: if true;
+    }
+
+    match /vozarals_announcements/{annId} {
+      allow read, write: if true;
+    }
+
+    match /vozarals_emails/{emailId} {
+      allow read, write: if true;
+    }
+
+    match /vozarals_invitations/{invId} {
+      allow read, write: if true;
+    }
+
+    match /vozarals_audit_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    match /vozarals_training/{trainId} {
+      allow read, write: if true;
+    }
   }
 }

@@ -589,7 +589,7 @@ export const SuiteToolsView: React.FC<SuiteToolsProps> = ({
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-150 pb-4 mb-6">
             <div>
-              <h2 className="text-xl font-serif font-bold text-[#1B2A6B]">Rate Matrix & Bid Calculator</h2>
+              <h2 className="text-xl font-serif font-bold text-[#1B2A6B]">Remote Rate Matrix &amp; Bid Calculator</h2>
               <p className="text-xs text-gray-500 mt-1">Estimate enterprise client billing quotes and contract linguist splits dynamically.</p>
             </div>
             <div className="p-1 px-3 bg-gray-50 border border-gray-200 rounded-md text-[10.5px] font-mono text-gray-600">
