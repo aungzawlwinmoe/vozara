@@ -1414,86 +1414,43 @@ export default function AdminPortalView() {
             ) : (
               <div className="space-y-8">
                 {/* Stats Grid Dashboard */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="stats-ribbon-grid">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="stats-ribbon-grid">
           
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-[#1B2A6B]" />
-            <div className="flex justify-between items-start">
-              <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Candidate Pool</span>
-              <Users className="w-5 h-5 text-[#F26522]" />
-            </div>
-            <div>
-              <div className="text-3xl font-serif font-bold text-[#1B2A6B] tracking-tight">{interpreters.length}</div>
-              <p className="text-[10.5px] text-gray-500 font-sans flex items-center gap-1 inline-flex mt-1">
-                Active Linguist Profiles Undergoing Review
-              </p>
-            </div>
-          </div>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-[#1B2A6B]" />
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Candidate Pool</span>
+                      <Users className="w-5 h-5 text-[#F26522]" />
+                    </div>
+                    <div>
+                      <div className="text-3xl font-serif font-bold text-[#1B2A6B] tracking-tight">{interpreters.length}</div>
+                      <p className="text-[10.5px] text-gray-500 font-sans flex items-center gap-1 inline-flex mt-1">
+                        Active Linguist Profiles Undergoing Review
+                      </p>
+                    </div>
+                  </div>
 
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-[#1B2A6B]" />
-            <div className="flex justify-between items-start">
-              <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Corporate Leads</span>
-              <FileText className="w-5 h-5 text-[#F26522]" />
-            </div>
-            <div>
-              <div className="text-3xl font-serif font-bold text-[#1B2A6B] tracking-tight">{contacts.length}</div>
-              <p className="text-[10.5px] text-gray-500 font-sans mt-1">
-                Enterprise Business Solutions Requests
-              </p>
-            </div>
-          </div>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-[#1B2A6B]" />
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Corporate Leads</span>
+                      <FileText className="w-5 h-5 text-[#F26522]" />
+                    </div>
+                    <div>
+                      <div className="text-3xl font-serif font-bold text-[#1B2A6B] tracking-tight">{contacts.length}</div>
+                      <p className="text-[10.5px] text-gray-500 font-sans mt-1">
+                        Enterprise Business Solutions Requests
+                      </p>
+                    </div>
+                  </div>
 
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-[#F26522]" />
-            <div className="flex justify-between items-start">
-              <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Bot-Shield Active</span>
-              <ShieldCheck className="w-5 h-5 text-emerald-500 animate-pulse" />
-            </div>
-            <div>
-              <div className="text-3xl font-serif font-bold text-[#1A2F6B] flex items-baseline gap-1">
-                {antispamSessions.length} <span className="text-xs text-gray-400 font-normal font-mono">leases</span>
-              </div>
-              <p className="text-[10.5px] text-gray-500 font-sans mt-1">
-                Single-use form entry handshakes registered
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between h-32 hover:shadow-md transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-[#F26522]" />
-            <div className="flex justify-between items-start">
-              <span className="text-[10.5px] uppercase tracking-widest text-[#1B2A6B] font-extrabold font-mono">Sync Countdown</span>
-              <RefreshCw className={`w-4 h-4 text-gray-400 ${autoSync !== "off" ? "animate-spin" : ""}`} />
-            </div>
-            <div>
-              <div className="text-xl font-mono font-bold text-[#1B2A6B] flex items-center gap-2">
-                {autoSync === "off" ? (
-                  <span className="text-xs text-gray-400 italic font-sans font-normal">Auto-Sync Inactive</span>
-                ) : (
-                  <>
-                    <span className="animate-pulse text-[#F26522]">●</span> 
-                    <span>Every {autoSync}s</span>
-                    <span className="text-xs text-gray-500 font-normal">({syncCountdown}s remaining)</span>
-                  </>
-                )}
-              </div>
-              <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden mt-2.5">
-                <div 
-                  className="bg-[#F26522] h-full transition-all duration-1000" 
-                  style={{ width: autoSync === "off" ? "0%" : `${(syncCountdown / parseInt(autoSync, 10)) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-        </div>
+                </div>
 
         {/* Dynamic Column Split Area */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* LEFT AREA (8 columns): Tabs list and primary table logs */}
-          <div className="col-span-1 lg:col-span-8 flex flex-col gap-6">
+          {/* LEFT AREA (Now expanded to full 12 columns span) */}
+          <div className="col-span-1 lg:col-span-12 flex flex-col gap-6">
             
             {/* Main Interactive Work Center */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
@@ -2063,29 +2020,12 @@ export default function AdminPortalView() {
 
             </div>
 
-            {/* Simulated candidate triggering controls (Under Tables) */}
-            {activeTab === "interpreters" && (
-              <div className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h4 className="text-xs uppercase font-extrabold text-[#1B2A6B] tracking-wider font-mono">Operations Diagnostics Sandbox Suite</h4>
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Test how the live candidate log monitor handles inbound candidates. Inject a simulated candidate application and inspect the real-time activity terminal.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSimulateCandidate}
-                  className="px-4 py-2 bg-[#F26522] hover:bg-[#D54F10] text-white font-bold text-xs uppercase tracking-wider rounded transition-colors shadow-sm cursor-pointer whitespace-nowrap"
-                >
-                  SIMULATE DEMO CANDIDATE
-                </button>
-              </div>
-            )}
+            {/* Operations Diagnostics Sandbox Suite (Removed per clean business view instructions) */}
 
           </div>
 
-          {/* RIGHT SIDEBAR (4 Columns): Log monitor stack and Dossier View */}
-          <div className="col-span-1 lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-8">
+          {/* RIGHT SIDEBAR (4 Columns): Log monitor stack (Hidden from view) */}
+          <div className="hidden">
             
             {/* DOSSIER DETAIL VERIFICATION CAPABLE STACK */}
             {selectedSub ? (
@@ -2544,6 +2484,364 @@ export default function AdminPortalView() {
         </div>
 
       </main>
+
+      {/* Dossier details modal popup overlay */}
+      {selectedSub && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]"
+          >
+            {/* Visual identity line */}
+            <div className={`h-1.5 w-full ${activeTab === "interpreters" ? "bg-[#F26522]" : "bg-[#1B2A6B]"}`} />
+
+            {/* Header info */}
+            <div className="p-5 border-b border-gray-150 flex items-center justify-between bg-gray-50/35 shrink-0">
+              <div className="max-w-[85%]">
+                <span className="text-[9.5px] uppercase font-bold tracking-widest text-[#F26522] font-mono block">
+                  {activeTab === "interpreters" ? "Linguist Credentials Dossier" : "Client Lead Requirements"}
+                </span>
+                <h3 className="font-serif text-lg font-bold text-[#1B2A6B] truncate mt-0.5" title={selectedSub.full_name}>
+                  {selectedSub.full_name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedSub(null)}
+                className="p-1.5 px-3 bg-gray-100 hover:bg-gray-250 hover:text-gray-900 border border-transparent rounded-md text-gray-450 cursor-pointer transition-all shrink-0 font-bold font-mono text-xs uppercase tracking-wider flex items-center gap-1.5"
+                title="Close Details view"
+              >
+                <X className="w-4 h-4" /> Close
+              </button>
+            </div>
+
+            {/* Body contents (scrollable area) */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs text-gray-770 flex-grow scrollbar-thin">
+              
+              {/* General details ribbon */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3 md:space-y-0 font-mono text-[11px] text-gray-800">
+                <div>
+                  <span className="text-[#1B2A6B] block uppercase font-bold text-[8.5px] tracking-widest mb-0.5">Submitter Email</span>
+                  <a href={`mailto:${selectedSub.submitter_email}`} className="font-semibold text-gray-900 hover:underline break-all">
+                    {selectedSub.submitter_email}
+                  </a>
+                </div>
+                <div>
+                  <span className="text-[#1B2A6B] block uppercase font-bold text-[8.5px] tracking-widest mb-0.5">Phone Line</span>
+                  <a href={`tel:${selectedSub.phone}`} className="font-semibold text-gray-900 hover:underline">
+                    {selectedSub.phone || "No phone supplied"}
+                  </a>
+                </div>
+                <div>
+                  <span className="text-[#1B2A6B] block uppercase font-bold text-[8.5px] tracking-widest mb-0.5">Location</span>
+                  <div className="font-bold text-gray-950 flex items-center gap-1 font-sans">
+                    <MapPin className="w-3.5 h-3.5 text-[#F26522] shrink-0" />
+                    {selectedSub.location || "International Pool - Remote"}
+                  </div>
+                </div>
+              </div>
+
+              {activeTab === "interpreters" ? (
+                /* CANDIDATE INFO FIELDS */
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono">Qualifications Matrix</span>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="px-2 py-1 bg-[#1B2A6B] text-white font-mono font-bold text-[9.5px] uppercase rounded">
+                        {selectedSub.primary_language}
+                      </span>
+                      {selectedSub.interpreting_modes && (
+                        <span className="px-2 py-1 bg-[#F26522]/10 border border-[#F26522]/20 text-[#D54F10] font-mono font-bold text-[9.5px] uppercase rounded">
+                          {selectedSub.interpreting_modes}
+                        </span>
+                      )}
+                    </div>
+                    {selectedSub.additional_languages && (
+                      <div className="text-[11px] text-gray-650 bg-gray-50 p-2.5 rounded border border-gray-150 mt-2">
+                        <strong>Secondary matching:</strong> {selectedSub.additional_languages}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-1">
+                    <div>
+                      <span className="text-[#1B2A6B] block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono">Experience</span>
+                      <p className="text-sm font-sans font-black text-[#1B2A6B]">{selectedSub.experience_years || "0"} Years Practicing</p>
+                    </div>
+                    <div>
+                      <span className="text-[#1B2A6B] block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono">Certifications</span>
+                      <p className="text-xs font-semibold text-emerald-700 font-sans font-bold">{selectedSub.certifications || "General Qualification"}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono font-mono">Expertise domain alignment</span>
+                    <p className="p-3 bg-gray-50 border border-gray-200 rounded font-sans italic text-gray-700">
+                      {selectedSub.medical_legal_knowledge || "Standard conference translating"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono font-mono">Hardware & Workspace environment</span>
+                    <p className="p-3 bg-gray-50 border border-gray-200 rounded font-mono text-[10.5px] leading-relaxed text-gray-600">
+                      {selectedSub.technical_setup || "No custom hardware profile submitted."}
+                    </p>
+                  </div>
+
+                  {selectedSub.linkedin_or_portfolio && (
+                    <div>
+                      <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono">Dossier Portfolio Link</span>
+                      <a 
+                        href={selectedSub.linkedin_or_portfolio} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="bg-gray-50 hover:bg-gray-100 border border-gray-200 p-2.5 rounded block text-[11px] font-mono break-all font-semibold text-[#F26522] flex items-center gap-1 hover:underline"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        {selectedSub.linkedin_or_portfolio}
+                      </a>
+                    </div>
+                  )}
+
+                  {selectedSub.cv_name && (
+                    <div className="space-y-2">
+                      <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono">Attached CV / Résumé</span>
+                      <div className="bg-gray-50 border border-gray-200 p-3 rounded-lg flex items-center justify-between gap-3 font-sans">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-10 w-10 rounded bg-[#F26522]/10 text-[#F26522] flex items-center justify-center shrink-0 border border-[#F26522]/20">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate" title={selectedSub.cv_name}>
+                              {selectedSub.cv_name}
+                            </p>
+                            <p className="text-[10px] text-gray-500 font-mono">
+                              {selectedSub.cv_size || "Unknown size"} &bull; Document File
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedSub.cv_base64) {
+                              const link = document.createElement("a");
+                              link.href = selectedSub.cv_base64.startsWith("data:") 
+                                ? selectedSub.cv_base64 
+                                : `data:application/pdf;base64,${selectedSub.cv_base64}`;
+                              link.download = selectedSub.cv_name || "Resume.pdf";
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              pushLog("SYSTEM", "SUCCESS", `Downloaded candidate resume: ${selectedSub.cv_name}`);
+                            } else {
+                              pushLog("SYSTEM", "WARN", "CV base64 payload is empty or corrupted.");
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-[#1B2A6B] hover:brightness-110 text-white font-bold text-[10px] uppercase tracking-wide rounded hover:cursor-pointer transition-all shadow-sm whitespace-nowrap shrink-0 flex items-center gap-1 font-mono"
+                        >
+                          Download CV
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedSub.additional_info && (
+                    <div className="space-y-1">
+                      <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono">Cover Note</span>
+                      <p className="p-3 bg-gray-50 border border-gray-150 rounded leading-relaxed italic text-gray-650">
+                        &ldquo;{selectedSub.additional_info}&rdquo;
+                      </p>
+                    </div>
+                  )}
+
+                  {/* SMTP Node captures preview */}
+                  {selectedSub.email_sandbox_preview && (
+                    <div className="pt-4 border-t border-gray-150 space-y-2">
+                      <div className="flex justify-between items-center bg-purple-50 p-2 border border-purple-200 rounded">
+                        <span className="text-[10px] font-bold text-purple-850 uppercase font-mono flex items-center gap-1 select-none">
+                          <Mail className="w-3.5 h-3.5" /> Intercepted Mail Envelope
+                        </span>
+                        <a 
+                          href={selectedSub.email_sandbox_preview} 
+                          target="_blank"  
+                          referrerPolicy="no-referrer"
+                          rel="noreferrer" 
+                          className="text-[10.5px] text-[#F26522] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                        >
+                          Open Raw HTML <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                      
+                      {/* Live mail capture iframe */}
+                      <div className="w-full h-52 rounded bg-gray-100 border border-gray-200 overflow-hidden relative">
+                        <div className="absolute top-0 left-0 right-0 h-5 px-2 flex items-center text-[8px] text-gray-400 uppercase tracking-widest font-mono font-bold select-none">
+                          SMTP Capture: careers@vozarals.com
+                        </div>
+                        <iframe 
+                          src={selectedSub.email_sandbox_preview}
+                          className="w-full h-full pt-5 bg-white" 
+                          title="SMTP mailbox previewer" 
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              ) : (
+                /* CORPORATE LEAD DETAILS */
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono">Solutions demanded</span>
+                    <span className="px-3 py-1 bg-[#1B2A6B] text-white rounded font-mono font-bold mt-1 text-[10px] uppercase inline-block">
+                      {selectedSub.service || "Linguistic translation solution"}
+                    </span>
+                    {selectedSub.language_pair && (
+                      <p className="text-[11px] mt-2.5 text-gray-600 font-mono">
+                        Language combination required: <strong className="text-gray-900">{selectedSub.language_pair}</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedSub.organization && (
+                    <div className="space-y-1">
+                      <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-mono">Enterprise client organization</span>
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded text-gray-800 font-serif font-bold text-sm flex items-center gap-2">
+                        <Building className="w-4 h-4 text-[#F26522] shrink-0" />
+                        {selectedSub.organization}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <span className="text-gray-400 block uppercase font-bold text-[8.5px] tracking-widest font-mono font-sans font-sans">Detailed requirement statement</span>
+                    <p className="p-4 bg-gray-50 border border-gray-200 rounded italic leading-relaxed text-[#1B2A6B] font-serif text-[13.5px]">
+                      &ldquo;{selectedSub.message}&rdquo;
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* DIRECT RECRUITER CORRESPONDENCE GMAIL GATEWAY */}
+              <div className="pt-4 border-t border-gray-200 space-y-3">
+                <h4 className="text-[10px] uppercase font-bold tracking-widest text-[#1B2A6B] font-mono flex items-center gap-1 select-none">
+                  <Mail className="w-3.5 h-3.5 text-[#F26522]" /> Recruiter Gmail Correspondence
+                </h4>
+                
+                {gmailToken ? (
+                  <div className="space-y-3 bg-gray-50 border border-gray-150 p-4 rounded-lg">
+                    <div>
+                      <label htmlFor="dossier_comp_temp" className="text-[9px] uppercase font-bold text-gray-500 block mb-1 font-mono">Select Email Template</label>
+                      <select 
+                        id="dossier_comp_temp"
+                        value={gmailTemplate}
+                        onChange={(e) => applyGmailTemplate(e.target.value, selectedSub.full_name, selectedSub)}
+                        className="w-full bg-white border border-gray-200 text-xs rounded p-2 text-gray-700 font-mono outline-none focus:ring-1 focus:ring-[#1B2A6B]"
+                      >
+                        <option value="welcome">Welcome & Hardware Checkup</option>
+                        <option value="interview">1-on-1 Audition Invitation</option>
+                        <option value="documentation">Documentation Pending Notification</option>
+                        <option value="custom">Blank Canvas (Custom Mail)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div>
+                        <label htmlFor="dossier_comp_to" className="text-[8.5px] font-bold text-gray-450 block mb-0.5 uppercase font-mono">To</label>
+                        <input 
+                          id="dossier_comp_to"
+                          type="email" 
+                          value={gmailRecipient}
+                          onChange={(e) => setGmailRecipient(e.target.value)}
+                          className="w-full bg-white border border-gray-200 text-xs rounded p-2 font-mono text-gray-800 outline-none"
+                          placeholder="candidate@email.com"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="dossier_comp_subj" className="text-[8.5px] font-bold text-gray-455 block mb-0.5 uppercase font-mono">Subject</label>
+                        <input 
+                          id="dossier_comp_subj"
+                          type="text" 
+                          value={gmailSubject}
+                          onChange={(e) => setGmailSubject(e.target.value)}
+                          className="w-full bg-white border border-gray-200 text-xs font-serif font-bold rounded p-2 text-gray-800 outline-none focus:border-[#1B2A6B]"
+                          placeholder="Application update..."
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="dossier_comp_body" className="text-[8.5px] font-bold text-gray-460 block mb-0.5 uppercase font-mono">HTML Message Body</label>
+                        <textarea 
+                          id="dossier_comp_body"
+                          value={gmailBody}
+                          onChange={(e) => setGmailBody(e.target.value)}
+                          className="w-full h-32 bg-white border border-gray-211 text-[11px] rounded p-2.5 font-mono text-gray-800 outline-none focus:border-[#1B2A6B] resize-y"
+                          placeholder="Dear Candidate..."
+                        />
+                      </div>
+                    </div>
+
+                    {gmailSendStatus !== "idle" && (
+                      <div className={`p-3 rounded-md text-xs leading-relaxed font-mono ${
+                        gmailSendStatus === "sending" ? "bg-blue-50 text-blue-800 border border-blue-200 animate-pulse" :
+                        gmailSendStatus === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" :
+                        "bg-red-50 text-red-800 border border-red-200"
+                      }`}>
+                        {gmailSendStatus === "sending" && "Transmitting MIME package over secure REST gateway..."}
+                        {gmailSendStatus === "success" && (
+                          <div className="space-y-0.5">
+                            <span className="font-bold">&check; Message dispatched successfully!</span>
+                            <p className="text-[10px] text-emerald-600">{gmailSendResultMsg}</p>
+                          </div>
+                        )}
+                        {gmailSendStatus === "error" && (
+                          <div className="space-y-0.5">
+                            <span className="font-bold">Transmission failure!</span>
+                            <p className="text-[10px] text-red-600">{gmailSendResultMsg}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={gmailLoading || gmailSendStatus === "sending"}
+                      onClick={sendComposeGmail}
+                      className="w-full py-2.5 bg-[#F26522] hover:bg-[#d45017] disabled:bg-gray-300 text-white font-bold rounded text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1 hover:cursor-pointer shadow-sm font-mono"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      {gmailSendStatus === "sending" ? "Transmitting..." : "Send via connected Gmail"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-gray-200 p-4 rounded-lg bg-gray-50/50 text-center space-y-2 select-none">
+                    <Mail className="w-7 h-7 text-gray-300 mx-auto" />
+                    <div className="text-xs font-bold text-gray-500">recruiter email correspondence offline</div>
+                    <p className="text-[10px] text-gray-400 max-w-sm mx-auto leading-relaxed">
+                      Link your Google Workspace Gmail account in the <span className="text-[#1C2D6D] font-bold hover:underline cursor-pointer" onClick={() => setActiveTab("integrations")}>Integrations</span> tab to instantly compose & dispatch custom answers directly from this dashboard.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Discard button */}
+            <div className="p-4 border-t border-gray-150 bg-gray-50/50 flex gap-2 shrink-0 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm({ type: activeTab === "interpreters" ? "interpreter" : "contact", id: selectedSub.id })}
+                className="w-full py-2.5 bg-red-100 hover:bg-red-650 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 transition-all rounded text-xs uppercase font-bold tracking-wider hover:cursor-pointer select-none flex items-center justify-center gap-2 font-mono"
+              >
+                <Trash className="w-4 h-4" />
+                Discard & Purge Ledger
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Slack Integration live simulator modal popup */}
       {slackTestModalOpen && slackTestPayload && (

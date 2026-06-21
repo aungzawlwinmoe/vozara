@@ -15,7 +15,7 @@ export function getEmailPreviewHtml(id: string): string | undefined {
  * Handles custom SMTP configurations, or auto-negotiates a transient test account
  * on Ethereal Email for sandbox testing.
  */
-export async function sendInterpreterApplicationEmail(payload: any): Promise<{ success: boolean; previewUrl?: string; error?: string }> {
+export async function sendInterpreterApplicationEmail(payload: any): Promise<{ success: boolean; previewUrl?: string; error?: string; emailHtml?: string }> {
   try {
     const defaultRecipient = "careers@vozarals.com";
     
@@ -210,7 +210,7 @@ export async function sendInterpreterApplicationEmail(payload: any): Promise<{ s
 
     if (!hasSmtpConfig) {
       console.log(`No production SMTP configured. Application email intercepted and routed to sandbox preview: ${localPreviewUrl}`);
-      return { success: true, previewUrl: localPreviewUrl };
+      return { success: true, previewUrl: localPreviewUrl, emailHtml };
     }
 
     if (transporter) {
@@ -227,10 +227,10 @@ export async function sendInterpreterApplicationEmail(payload: any): Promise<{ s
       }
     }
 
-    return { success: true, previewUrl: localPreviewUrl };
+    return { success: true, previewUrl: localPreviewUrl, emailHtml };
   } catch (error: any) {
     console.log("Nodemailer sandbox system handled fallback.");
-    return { success: true, previewUrl: `/api/forms/email-preview?fallback=true` };
+    return { success: true, previewUrl: `/api/forms/email-preview?fallback=true`, emailHtml: "" };
   }
 }
 

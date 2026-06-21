@@ -2498,7 +2498,7 @@ function AnimatedAppContent({
       </main>
 
       {/* Universal Sticky Footing */}
-      <Footer />
+      {location.pathname !== "/admin" && <Footer />}
 
       {/* Global Quote Requester Dialog Portal */}
       <QuoteModal 

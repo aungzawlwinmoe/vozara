@@ -215,6 +215,41 @@ async function startServer() {
         console.error("Failed to write contact request to Firestore:", dbErr);
       }
 
+      // Automatically add incoming email from the sender into Inbox of support@vozarals.com (one.com specific mailbox)
+      const contactEmailId = "m-inc-contact-" + Date.now();
+      const contactIncomingEmail = {
+        id: contactEmailId,
+        from: submitter_email,
+        to: "support@vozarals.com",
+        subject: `New Corporate Lead Requirement - ${full_name}`,
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        body: `<h3>Business Lead Inquiry Received</h3>
+        <p><strong>From:</strong> ${full_name} (&lt;<a href="mailto:${submitter_email}">${submitter_email}</a>&gt;)</p>
+        <p><strong>Phone:</strong> ${phone || "Not specified"}</p>
+        <p><strong>Organization:</strong> ${organization || "Not specified"}</p>
+        <p><strong>Service Demanded:</strong> ${service || "Not specified"}</p>
+        <p><strong>Language Pair Required:</strong> ${language_pair || "Not specified"}</p>
+        <p><strong>Detailed Requirements statement:</strong></p>
+        <div style="background-color: #f1f5f9; border-radius: 4px; padding: 16px; margin-top: 10px; font-style: italic; color: #334155; line-height: 22px; border-left: 4px solid #1B2A6B;">
+          "${message}"
+        </div>
+        <br/>
+        <hr style="border: none; border-top: 1px solid #edf2f7; margin: 20px 0;"/>
+        <p style="font-size: 11px; color: #94a3b8; font-family: sans-serif;">This submission was automatically intercepted and routed to support@vozarals.com inbox.</p>`,
+        isRead: false,
+        folder: "inbox"
+      };
+
+      MOCK_EMAILS.unshift(contactIncomingEmail);
+      if (db) {
+        try {
+          await setDoc(doc(db, "vozarals_emails", contactEmailId), contactIncomingEmail);
+          console.log("Successfully persisted contact lead incoming email to vozarals_emails collection!");
+        } catch (dbErr) {
+          console.error("Failed to persist contact lead incoming email to Firestore:", dbErr);
+        }
+      }
+
       // Keep local list sync as dynamic fallback
       contactSubmissions.push({
         id: "cnt_" + Date.now(),
@@ -263,7 +298,7 @@ async function startServer() {
       }
 
       // Dispatch real email to careers@vozarals.com via SMTP
-      let emailResult: { success: boolean; previewUrl?: string; error?: string } | null = null;
+      let emailResult: { success: boolean; previewUrl?: string; error?: string; emailHtml?: string } | null = null;
       try {
         emailResult = await sendInterpreterApplicationEmail(payload);
       } catch (mailErr) {
@@ -272,6 +307,34 @@ async function startServer() {
 
       const timestamp = new Date().toISOString();
       const emailSandboxPreview = emailResult?.previewUrl || "";
+
+      // Automatically add incoming email from the sender into Inbox of careers@vozarals.com (one.com specific mailbox)
+      const appEmailId = "m-inc-app-" + Date.now();
+      const defaultHtml = `<h3>Interpreter Application: ${full_name}</h3>
+      <p><strong>From:</strong> ${full_name} (&lt;<a href="mailto:${submitter_email}">${submitter_email}</a>&gt;)</p>
+      <p><strong>Primary Language:</strong> ${primary_language}</p>
+      <p>Please check the candidate dossier logs for complete records.</p>`;
+      
+      const appIncomingEmail = {
+        id: appEmailId,
+        from: submitter_email,
+        to: "careers@vozarals.com",
+        subject: `[Candidate Registry] ${full_name} - ${primary_language} Interpreter`,
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        body: emailResult?.emailHtml || defaultHtml,
+        isRead: false,
+        folder: "inbox"
+      };
+
+      MOCK_EMAILS.unshift(appIncomingEmail);
+      if (db) {
+        try {
+          await setDoc(doc(db, "vozarals_emails", appEmailId), appIncomingEmail);
+          console.log("Successfully persisted interpreter incoming email to vozarals_emails collection!");
+        } catch (dbErr) {
+          console.error("Failed to persist interpreter incoming email to Firestore:", dbErr);
+        }
+      }
 
       const path = "interpreter_submissions";
       try {
