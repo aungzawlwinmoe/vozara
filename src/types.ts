@@ -50,6 +50,7 @@ export interface CareerRole {
   description: string;
   requirements: string[];
   isInterpreter: boolean;
+  informationManual?: string;
 }
 
 export interface PerkItem {

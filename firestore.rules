@@ -42,5 +42,9 @@ service cloud.firestore {
     match /vozarals_training/{trainId} {
       allow read, write: if true;
     }
+
+    match /vozarals_career_roles/{roleId} {
+      allow read, write: if true;
+    }
   }
 }

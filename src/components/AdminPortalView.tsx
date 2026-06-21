@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { SuiteToolsView } from "./SuiteToolsView";
 import { AdminDashboard } from "./AdminDashboard";
+import { CareersManager } from "./CareersManager";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -128,7 +129,7 @@ export default function AdminPortalView() {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Active Admin Tool Selection
-  const [activeTool, setActiveTool] = useState<"vozara_control" | "suitability_analyzer" | "log_auditor" | "compliance_signatures" | "rate_calculator" | "compliance_mailbox_portal">("vozara_control");
+  const [activeTool, setActiveTool] = useState<"vozara_control" | "suitability_analyzer" | "log_auditor" | "compliance_signatures" | "rate_calculator" | "compliance_mailbox_portal" | "careers_manager">("vozara_control");
 
   // State for Candidate Suitability Analyzer
   const [selectedSuiteCandidateId, setSelectedSuiteCandidateId] = useState<string>("");
@@ -1251,7 +1252,7 @@ export default function AdminPortalView() {
                   </div>
                 </button>
 
-                {/* TOOL 2: SUITABILITY ANALYZER */}
+                {/* TOOL 2: SUITABILITY ANALYZER (HIDDEN)
                 <button
                   type="button"
                   id="tool-select-suitability"
@@ -1271,8 +1272,9 @@ export default function AdminPortalView() {
                     <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Review ATS score index and rank qualifications in real-time.</p>
                   </div>
                 </button>
+                */}
 
-                {/* TOOL 3: REAL-TIME LOGSTREAM */}
+                {/* TOOL 3: REAL-TIME LOGSTREAM (HIDDEN)
                 <button
                   type="button"
                   id="tool-select-logs"
@@ -1292,6 +1294,7 @@ export default function AdminPortalView() {
                     <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Monitor server signals, memory logs, and sync channels.</p>
                   </div>
                 </button>
+                */}
 
                 {/* TOOL 4: COMPLIANCE LEDGERS */}
                 <button
@@ -1314,7 +1317,7 @@ export default function AdminPortalView() {
                   </div>
                 </button>
 
-                {/* TOOL 5: RATE MATRIX CALC */}
+                {/* TOOL 5: RATE MATRIX CALC (HIDDEN)
                 <button
                   type="button"
                   id="tool-select-ratecalc"
@@ -1334,6 +1337,7 @@ export default function AdminPortalView() {
                     <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Estimate enterprise quotes and payout split scenarios dynamically.</p>
                   </div>
                 </button>
+                */}
 
                 {/* TOOL 6: VOZARALS COMPLIANCE & MAILBOX HUB PORTAL */}
                 <button
@@ -1355,6 +1359,27 @@ export default function AdminPortalView() {
                     <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Regulatory on boarding directory, One.com email gateway, and audits.</p>
                   </div>
                 </button>
+
+                {/* TOOL 7: CAREERS MANAGER */}
+                <button
+                  type="button"
+                  id="tool-select-careersmanager"
+                  onClick={() => {
+                    setActiveTool("careers_manager");
+                    pushLog("SYSTEM", "INFO", "Switched active tool context to CAREERS & OPEN CONTRACTOR ROLES MANAGER");
+                  }}
+                  className={`w-full text-left p-3.5 rounded-lg border transition-all duration-225 cursor-pointer flex items-start gap-3 ${
+                    activeTool === "careers_manager"
+                      ? "bg-[#1B2A6B]/5 border-[#1B2A6B] text-[#1B2A6B] font-bold shadow-sm"
+                      : "bg-white hover:bg-gray-50 border-gray-200 text-gray-600"
+                  }`}
+                >
+                  <Briefcase className={`w-5 h-5 mt-0.5 shrink-0 ${activeTool === "careers_manager" ? "text-[#F26522]" : "text-gray-400"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-serif text-sm font-bold font-semibold text-[#1B2A6B]">Careers &amp; Contractor Roles</div>
+                    <p className="text-[10px] text-gray-450 leading-normal mt-0.5 font-normal">Publish open freelance positions, configure requirements and manual pages.</p>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
@@ -1366,6 +1391,11 @@ export default function AdminPortalView() {
                 interpreters={interpreters}
                 contacts={contacts}
                 logs={logs}
+                pushLog={pushLog}
+                triggerSystemMessage={triggerSystemMessage}
+              />
+            ) : activeTool === "careers_manager" ? (
+              <CareersManager
                 pushLog={pushLog}
                 triggerSystemMessage={triggerSystemMessage}
               />

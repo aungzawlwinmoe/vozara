@@ -157,6 +157,10 @@
     "/vozarals_training/{trainId}": {
       "schema": "object",
       "description": "Active onboarding syllabi structure"
+    },
+    "/vozarals_career_roles/{roleId}": {
+      "schema": "object",
+      "description": "Custom Open Contractor Roles defined by admin and shown in careers view"
     }
   }
 }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { submitContactFormDirect, submitInterpreterAppDirect } from "./firebase";
+import { submitContactFormDirect, submitInterpreterAppDirect, db } from "./firebase";
+import { onSnapshot, collection, query } from "firebase/firestore";
+import { CareerRole } from "./types";
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -886,10 +888,28 @@ function AboutView({ onOpenQuote }: { onOpenQuote: (service?: string) => void })
    ========================================= */
 function CareersView() {
   const [openAccordion, setOpenAccordion] = useState<string | null>("role-medical-interpreter");
+  const [customRoles, setCustomRoles] = useState<CareerRole[]>([]);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, "vozarals_career_roles"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: CareerRole[] = [];
+      snapshot.forEach((snapDoc) => {
+        list.push({ id: snapDoc.id, ...snapDoc.data() } as CareerRole);
+      });
+      setCustomRoles(list);
+    }, (error) => {
+      console.warn("Could not synchronize live contractor roles from Firestore: ", error);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const toggleAccordion = (roleId: string) => {
     setOpenAccordion(openAccordion === roleId ? null : roleId);
   };
+
+  const allRoles = [...careerRolesData, ...customRoles];
 
   return (
     <div className="animate-fade-in space-y-1">
@@ -951,7 +971,7 @@ function CareersView() {
 
           {/* Accordion container */}
           <div className="space-y-4">
-            {careerRolesData.map((role) => {
+            {allRoles.map((role) => {
               const isExpanded = openAccordion === role.id;
               return (
                 <div 
@@ -989,7 +1009,7 @@ function CareersView() {
                   {/* Expandable Content Panel */}
                   <div 
                     className={`transition-all duration-300 ease-in-out ${
-                      isExpanded ? "max-h-[1000px] border-t border-white/10 p-6" : "max-h-0 overflow-hidden"
+                      isExpanded ? "max-h-[1500px] border-t border-white/10 p-6" : "max-h-0 overflow-hidden"
                     }`}
                   >
                     {isExpanded && (
@@ -998,17 +1018,28 @@ function CareersView() {
                           {role.description}
                         </p>
 
-                        <div className="space-y-2.5">
-                          <h4 className="text-[11px] uppercase font-bold tracking-wider text-brand-orange font-mono">Candidate Requirements:</h4>
-                          <ul className="space-y-2">
-                            {role.requirements.map((req, rIdx) => (
-                              <li key={rIdx} className="flex items-start gap-2 text-xs text-gray-700">
-                                <Check className="w-3.5 h-3.5 text-brand-orange mt-0.5 flex-shrink-0" />
-                                <span className="font-medium">{req}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        {role.requirements && role.requirements.length > 0 && (
+                          <div className="space-y-2.5">
+                            <h4 className="text-[11px] uppercase font-bold tracking-wider text-brand-orange font-mono">Candidate Requirements:</h4>
+                            <ul className="space-y-2">
+                              {role.requirements.map((req, rIdx) => (
+                                <li key={rIdx} className="flex items-start gap-2 text-xs text-gray-700">
+                                  <Check className="w-3.5 h-3.5 text-brand-orange mt-0.5 flex-shrink-0" />
+                                  <span className="font-medium">{req}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {role.informationManual && (
+                          <div className="p-4 bg-brand-navy/5 border border-brand-navy/10 rounded-sm">
+                            <h4 className="text-[11px] uppercase font-bold tracking-wider text-brand-navy font-mono mb-2">Role Information Manual:</h4>
+                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                              {role.informationManual}
+                            </p>
+                          </div>
+                        )}
 
                         <div className="pt-4 flex items-center gap-4">
                           {role.isInterpreter ? (
