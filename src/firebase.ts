@@ -17,6 +17,8 @@ import {
   orderBy
 } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
+import { syncWithConvexClient } from "./convexClient";
+import { syncSingleToVercel } from "./vercelSync";
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
@@ -88,7 +90,7 @@ export const logout = async () => {
 // Direct Firestore Helpers for client Fallback (such as on GitHub Pages statically deployed apps)
 export const submitContactFormDirect = async (payload: any) => {
   const timestamp = new Date().toISOString();
-  await addDoc(collection(db, "contact_submissions"), {
+  const data = {
     full_name: payload.full_name,
     submitter_email: payload.submitter_email,
     phone: payload.phone || "",
@@ -97,12 +99,23 @@ export const submitContactFormDirect = async (payload: any) => {
     language_pair: payload.language_pair || "",
     message: payload.message,
     timestamp
-  });
+  };
+  await addDoc(collection(db, "contact_submissions"), data);
+  try {
+    await syncWithConvexClient("contact", data);
+  } catch (syncErr) {
+    console.warn("Auto sync contact to Convex failed:", syncErr);
+  }
+  try {
+    await syncSingleToVercel("contact", data);
+  } catch (syncErr) {
+    console.warn("Auto sync contact to Vercel failed:", syncErr);
+  }
 };
 
 export const submitInterpreterAppDirect = async (payload: any) => {
   const timestamp = new Date().toISOString();
-  await addDoc(collection(db, "interpreter_submissions"), {
+  const data = {
     full_name: payload.full_name,
     submitter_email: payload.submitter_email,
     phone: payload.phone,
@@ -123,7 +136,18 @@ export const submitInterpreterAppDirect = async (payload: any) => {
     cv_base64: payload.cv_base64 || "",
     timestamp,
     email_sandbox_preview: ""
-  });
+  };
+  await addDoc(collection(db, "interpreter_submissions"), data);
+  try {
+    await syncWithConvexClient("interpreter", data);
+  } catch (syncErr) {
+    console.warn("Auto sync interpreter entry to Convex failed:", syncErr);
+  }
+  try {
+    await syncSingleToVercel("interpreter", data);
+  } catch (syncErr) {
+    console.warn("Auto sync interpreter entry to Vercel failed:", syncErr);
+  }
 };
 
 export const getContactSubmissionsDirect = async (): Promise<any[]> => {

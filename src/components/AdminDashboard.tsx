@@ -44,7 +44,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   triggerSystemMessage
 }) => {
   // Current tab state inside the portal
-  const [activeTab, setActiveTab] = useState<"analytics" | "mailbox" | "invitations" | "settings" | "training" | "audit" | "announcements">("analytics");
+  const [activeTab, setActiveTab ] = useState<"analytics" | "mailbox" | "invitations" | "settings" | "training" | "audit" | "announcements">("mailbox");
 
   // One.com Mailbox states
   const [selectedAccount, setSelectedAccount] = useState<string>("support@vozarals.com");
@@ -66,6 +66,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [smtpUser, setSmtpUser] = useState<string>("support@vozarals.com");
   const [smtpPass, setSmtpPass] = useState<string>("");
   const [settingsSaving, setSettingsSaving] = useState<boolean>(false);
+
+  // Convex Integration states
+  const [convexEnabled, setConvexEnabled] = useState<boolean>(false);
+  const [convexUrl, setConvexUrl] = useState<string>("");
+  const [convexContactMutation, setConvexContactMutation] = useState<string>("submissions:addContact");
+  const [convexInterpreterMutation, setConvexInterpreterMutation] = useState<string>("submissions:addInterpreter");
+  const [convexDeployKey, setConvexDeployKey] = useState<string>("");
+  const [convexSaving, setConvexSaving] = useState<boolean>(false);
+  const [convexSyncing, setConvexSyncing] = useState<boolean>(false);
+  const [convexSyncResult, setConvexSyncResult] = useState<any | null>(null);
+
+  // Vercel Integration states
+  const [vercelEnabled, setVercelEnabled] = useState<boolean>(false);
+  const [vercelUrl, setVercelUrl] = useState<string>("");
+  const [vercelAuthToken, setVercelAuthToken] = useState<string>("");
+  const [vercelCustomHeader, setVercelCustomHeader] = useState<string>("Authorization");
+  const [vercelSaving, setVercelSaving] = useState<boolean>(false);
+  const [vercelSyncing, setVercelSyncing] = useState<boolean>(false);
+  const [vercelSyncResult, setVercelSyncResult] = useState<any | null>(null);
 
   // Compose states
   const [isComposing, setIsComposing] = useState<boolean>(false);
@@ -194,6 +213,184 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       triggerSystemMessage("Exception setting administrative credentials.", true);
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  // 3.1 Fetch Convex Config
+  const fetchConvexSettings = async () => {
+    try {
+      const resp = await fetch("/api/convex/config", { headers: getHeaders() });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.success && data.config) {
+          setConvexEnabled(data.config.enabled || false);
+          setConvexUrl(data.config.deploymentUrl || "");
+          setConvexContactMutation(data.config.contactMutation || "submissions:addContact");
+          setConvexInterpreterMutation(data.config.interpreterMutation || "submissions:addInterpreter");
+          setConvexDeployKey(data.config.deployKey || "");
+        }
+      }
+    } catch (e) {
+      console.warn("Could not retrieve Convex settings profile:", e);
+    }
+  };
+
+  // 3.2 Save Convex Config
+  const saveConvexSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConvexSaving(true);
+    try {
+      const resp = await fetch("/api/convex/config", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          enabled: convexEnabled,
+          deploymentUrl: convexUrl,
+          contactMutation: convexContactMutation,
+          interpreterMutation: convexInterpreterMutation,
+          deployKey: convexDeployKey
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.success) {
+          triggerSystemMessage("Convex synchronization configuration updated.", false);
+          pushLog("CONVEX_SYNC", "SUCCESS", `Admin configured Convex integration. Enabled: ${convexEnabled}, URL: ${convexUrl}`);
+          fetchAuditLogs();
+        }
+      } else {
+        triggerSystemMessage("Convex settings save failed.", true);
+      }
+    } catch (err) {
+      triggerSystemMessage("Exception saving Convex integration details.", true);
+    } finally {
+      setConvexSaving(false);
+    }
+  };
+
+  // 3.3 Trigger Convex Historical Backport / Sync All
+  const triggerConvexSyncAll = async () => {
+    setConvexSyncing(true);
+    setConvexSyncResult(null);
+    try {
+      const resp = await fetch("/api/convex/sync-all", {
+        method: "POST",
+        headers: getHeaders()
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setConvexSyncResult({
+          success: true,
+          contacts: data.contactSubmissionsSynced,
+          interpreters: data.interpreterSubmissionsSynced,
+          failed: data.failedCount,
+          errors: data.errors
+        });
+        triggerSystemMessage(`Sync complete! ${data.contactSubmissionsSynced} contacts and ${data.interpreterSubmissionsSynced} interpreters replicated.`, false);
+        pushLog("CONVEX_SYNC", "SUCCESS", `Admin triggered bulk Convex backport: ${data.contactSubmissionsSynced + data.interpreterSubmissionsSynced} items synced.`);
+      } else {
+        setConvexSyncResult({
+          success: false,
+          error: data.error || "Sync execution was unsuccessful."
+        });
+        triggerSystemMessage(data.error || "Historical sync failed. See details below.", true);
+      }
+    } catch (err: any) {
+      setConvexSyncResult({
+        success: false,
+        error: err.message || "Exception triggered during bulk sync."
+      });
+      triggerSystemMessage("Exception triggered during bulk Convex sync.", true);
+    } finally {
+      setConvexSyncing(false);
+    }
+  };
+
+  // 3.31 Fetch Vercel Config
+  const fetchVercelSettings = async () => {
+    try {
+      const resp = await fetch("/api/vercel/config", { headers: getHeaders() });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.success && data.config) {
+          setVercelEnabled(data.config.enabled || false);
+          setVercelUrl(data.config.endpointUrl || "");
+          setVercelAuthToken(data.config.authToken || "");
+          setVercelCustomHeader(data.config.customHeader || "Authorization");
+        }
+      }
+    } catch (e) {
+      console.warn("Could not retrieve Vercel settings profile:", e);
+    }
+  };
+
+  // 3.32 Save Vercel Config
+  const saveVercelSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVercelSaving(true);
+    try {
+      const resp = await fetch("/api/vercel/config", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          enabled: vercelEnabled,
+          endpointUrl: vercelUrl,
+          authToken: vercelAuthToken,
+          customHeader: vercelCustomHeader
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.success) {
+          triggerSystemMessage("Vercel synchronization configuration updated.", false);
+          pushLog("VERCEL_SYNC", "SUCCESS", `Admin configured Vercel integration. Enabled: ${vercelEnabled}, URL: ${vercelUrl}`);
+          fetchAuditLogs();
+        }
+      } else {
+        triggerSystemMessage("Vercel settings save failed.", true);
+      }
+    } catch (err) {
+      triggerSystemMessage("Exception saving Vercel integration details.", true);
+    } finally {
+      setVercelSaving(false);
+    }
+  };
+
+  // 3.33 Trigger Vercel Historical Backport / Sync All
+  const triggerVercelSyncAll = async () => {
+    setVercelSyncing(true);
+    setVercelSyncResult(null);
+    try {
+      const resp = await fetch("/api/vercel/sync-all", {
+        method: "POST",
+        headers: getHeaders()
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setVercelSyncResult({
+          success: true,
+          contacts: data.contactSubmissionsSynced,
+          interpreters: data.interpreterSubmissionsSynced,
+          failed: data.failedCount,
+          errors: data.errors
+        });
+        triggerSystemMessage(`Vercel Sync complete! ${data.contactSubmissionsSynced} contacts and ${data.interpreterSubmissionsSynced} interpreters replicated.`, false);
+        pushLog("VERCEL_SYNC", "SUCCESS", `Admin triggered bulk Vercel backport: ${data.contactSubmissionsSynced + data.interpreterSubmissionsSynced} items synced.`);
+      } else {
+        setVercelSyncResult({
+          success: false,
+          error: data.error || "Sync execution was unsuccessful to Vercel."
+        });
+        triggerSystemMessage(data.error || "Historical Vercel sync failed. See details below.", true);
+      }
+    } catch (err: any) {
+      setVercelSyncResult({
+        success: false,
+        error: err.message || "Exception triggered during bulk Vercel sync."
+      });
+      triggerSystemMessage("Exception triggered during bulk Vercel sync.", true);
+    } finally {
+      setVercelSyncing(false);
     }
   };
 
@@ -391,6 +588,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     fetchMailbox(selectedAccount, selectedFolder);
     fetchSettings(configAccount);
+    fetchConvexSettings();
+    fetchVercelSettings();
     fetchInvitations();
     fetchTraining();
     fetchAuditLogs();
@@ -434,10 +633,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* HORIZONTAL MINI TABS FOR NAV */}
       <div className="bg-slate-100 border-b border-slate-200 flex flex-wrap gap-1 p-2 select-none">
         <button
+          type="button"
           onClick={() => { setActiveTab("analytics"); pushLog("SYSTEM", "INFO", "Inspecting Vozarals administrative telemetry summary panel."); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 rounded text-xs uppercase font-extrabold tracking-wider transition-colors hover:cursor-pointer ${
-            activeTab === "analytics" ? "bg-white text-indigo-700 shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-200"
-          }`}
+          className="hidden"
         >
           <LayoutDashboard className="w-4 h-4" /> Analytics Summary
         </button>
@@ -470,10 +668,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </button>
 
         <button
+          type="button"
           onClick={() => { setActiveTab("audit"); fetchAuditLogs(); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 rounded text-xs uppercase font-extrabold tracking-wider transition-colors hover:cursor-pointer ${
-            activeTab === "audit" ? "bg-white text-indigo-700 shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-200"
-          }`}
+          className="hidden"
         >
           <FileText className="w-4 h-4" /> HIPAA Audit Log
         </button>
@@ -654,13 +851,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {/* LEFT ACCOUNT & EMAIL SELECTION PANEL */}
                 <div className="lg:col-span-5 border border-slate-200 rounded-lg p-4 bg-white flex flex-col justify-between space-y-4">
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200 hidden">
                       <span className="text-[10px] uppercase font-bold text-slate-400 font-mono tracking-wider">Mail Account Select</span>
                       <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-mono font-bold uppercase">One.com Hosted</span>
                     </div>
 
                     {/* ACCOUNT TOGGLERS */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 hidden">
                       {["support@vozarals.com", "hr@vozarals.com", "careers@vozarals.com", "admin@vozarals.com"].map((acct) => (
                         <button
                           key={acct}
@@ -751,8 +948,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   {/* INTERACTIVE IMAP DISCOVERY STDOUT CONSOLE */}
-                  <div className="pt-4 border-t border-slate-150">
-                    <span className="text-[9.5px] uppercase font-bold font-mono text-indigo-700 block mb-1.5 select-none">IMAP DISCOVERY PROTOCOL LOGS (STDOUT)</span>
+                  <div className="pt-4 border-t border-slate-150 hidden">
+                    <span className="text-[9.5px] uppercase font-bold font-mono text-indigo-700 block mb-1.5 select-none font-sans">IMAP DISCOVERY PROTOCOL LOGS (STDOUT)</span>
                     <div className="bg-slate-950 text-slate-300 font-mono text-[9.5px] p-3 rounded-md h-[180px] overflow-y-auto space-y-1 shadow-inner relative select-text selection:bg-indigo-800">
                       {imapLogs.map((lg, i) => (
                         <div key={i} className="hover:bg-white/5 py-0.5 rounded leading-normal">
@@ -901,7 +1098,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </button>
                           <button
                             onClick={() => triggerSystemMessage("Secure print archive generated.")}
-                            className="p-1.5 px-3 bg-slate-100 hover:bg-slate-150 border border-slate-200 hover:border-slate-350 text-slate-700 text-xs font-bold rounded cursor-pointer transition-colors"
+                            className="p-1.5 px-3 bg-slate-100 hover:bg-slate-150 border border-slate-200 hover:border-slate-350 text-slate-700 text-xs font-bold rounded cursor-pointer transition-colors hidden"
                           >
                             Print Dossier Checkup
                           </button>
@@ -1492,6 +1689,318 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               </form>
+
+              {/* CONVEX CLOUD INTEGRATION CARD */}
+              <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm max-w-2xl mx-auto space-y-6 mt-6">
+                <div className="border-b pb-3 border-slate-200 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-extrabold uppercase font-mono tracking-widest text-[#1B2A6B] flex items-center gap-1.5 select-none">
+                      <RefreshCw className={`w-5 h-5 text-indigo-600 ${convexEnabled ? "animate-spin" : ""}`} style={{ animationDuration: '6s' }} /> Convex Cloud Replication Data-Sync
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Configure real-time replication from Firestore to your external Convex Cloud BaaS backend.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConvexEnabled(!convexEnabled)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                        convexEnabled ? "bg-[#F26522]" : "bg-slate-200"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          convexEnabled ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-[10px] uppercase font-bold font-mono text-slate-500">
+                      {convexEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={saveConvexSettings} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="convex_deployment_url" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Convex Deployment HTTP URL</label>
+                    <input
+                      id="convex_deployment_url"
+                      type="text"
+                      required={convexEnabled}
+                      className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                      placeholder="https://happy-otter-123.convex.cloud"
+                      value={convexUrl}
+                      onChange={(e) => setConvexUrl(e.target.value)}
+                    />
+                    <span className="text-[9px] text-slate-400 block italic leading-tight">
+                      This is your Convex HTTP REST address. Client &amp; backend requests will use JSON-RPC to replicate new entries.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="convex_contact_mut" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Contact Submissions Mutation</label>
+                      <input
+                        id="convex_contact_mut"
+                        type="text"
+                        required={convexEnabled}
+                        className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                        placeholder="submissions:addContact"
+                        value={convexContactMutation}
+                        onChange={(e) => setConvexContactMutation(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="convex_interpreter_mut" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Interpreter App Mutation</label>
+                      <input
+                        id="convex_interpreter_mut"
+                        type="text"
+                        required={convexEnabled}
+                        className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                        placeholder="submissions:addInterpreter"
+                        value={convexInterpreterMutation}
+                        onChange={(e) => setConvexInterpreterMutation(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="convex_deploy_key" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Deploy Key / Bearer Auth Token (Optional)</label>
+                    <input
+                      id="convex_deploy_key"
+                      type="password"
+                      className="w-full bg-white border border-slate-250 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                      placeholder="••••••••••••••••••••••••••••"
+                      value={convexDeployKey}
+                      onChange={(e) => setConvexDeployKey(e.target.value)}
+                    />
+                    <span className="text-[9px] text-slate-400 block italic leading-tight">
+                      Provide a secret token if you protect mutations with Bearer authorizations.
+                    </span>
+                  </div>
+
+                  <div className="pt-4 flex justify-between items-center gap-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={triggerConvexSyncAll}
+                        disabled={convexSyncing || !convexEnabled || !convexUrl}
+                        className="p-2 px-4 font-mono font-bold bg-[#F26522] hover:bg-orange-600 duration-150 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow select-none cursor-pointer"
+                        title="Sync all previous Firestore entries into Convex right now"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${convexSyncing ? "animate-spin" : ""}`} />
+                        {convexSyncing ? "Syncing Batch..." : "Backport Sync Existing Data"}
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={convexSaving}
+                      className="p-2.5 px-6 font-mono font-bold bg-[#1B2A6B] hover:bg-slate-800 duration-150 disabled:bg-slate-300 text-white rounded text-xs uppercase tracking-wider flex items-center gap-1.5 shadow cursor-pointer select-none"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-[#F26522]" />
+                      {convexSaving ? "Saving..." : "Save Convex Settings"}
+                    </button>
+                  </div>
+                </form>
+
+                {/* SYNC RESULTS REPORT CONTAINER */}
+                {convexSyncResult && (
+                  <div className={`p-4 rounded-md border text-xs font-mono space-y-2 mt-4 max-w-full overflow-x-auto ${
+                    convexSyncResult.success ? "bg-emerald-50 border-emerald-250 text-emerald-800" : "bg-rose-50 border-rose-250 text-rose-800"
+                  }`}>
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="uppercase flex items-center gap-1">
+                        {convexSyncResult.success ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Synchronization Succeeded
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-4 h-4 text-rose-600" /> Synchronization Failed
+                          </>
+                        )}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setConvexSyncResult(null)}
+                        className="text-slate-450 hover:text-slate-600 text-sm font-sans"
+                      >
+                        &times;
+                      </button>
+                    </div>
+
+                    {convexSyncResult.success ? (
+                      <div className="space-y-1 text-[11px] leading-relaxed">
+                        <p>Total Corporate Leads synced: <strong className="text-emerald-700">{convexSyncResult.contacts}</strong></p>
+                        <p>Total Interpreter Registry applications synced: <strong className="text-emerald-700">{convexSyncResult.interpreters}</strong></p>
+                        <p>Replication failures: <strong className={convexSyncResult.failed > 0 ? "text-rose-600" : "text-emerald-700 font-bold"}>{convexSyncResult.failed}</strong></p>
+                        {convexSyncResult.errors && convexSyncResult.errors.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-emerald-150 text-[10px] space-y-1">
+                            <span className="font-bold text-slate-600 uppercase block">Sample Sync Exceptions:</span>
+                            {convexSyncResult.errors.map((er: string, idx: number) => (
+                              <div key={idx} className="bg-white/40 p-1 px-1.5 rounded text-rose-750 font-mono">{er}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-rose-750 leading-relaxed font-mono">
+                        Error log trace: {convexSyncResult.error}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* VERCEL CLOUD INTEGRATION CARD */}
+              <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm max-w-2xl mx-auto space-y-6 mt-6">
+                <div className="flex items-start justify-between pb-4 border-b">
+                  <div>
+                    <h3 className="text-sm font-sans font-bold text-[#1B2A6B] flex items-center gap-2">
+                      <span className="p-1.5 bg-black text-white rounded-md flex items-center justify-center">
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2L2 22h20L12 2z"/>
+                        </svg>
+                      </span>
+                      Vercel Serverless Data Integration
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Configure real-time replication from Firestore directly to your serverless backend endpoints hosted on Vercel.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVercelEnabled(!vercelEnabled)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                        vercelEnabled ? "bg-[#1B2A6B]" : "bg-slate-200"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          vercelEnabled ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-[10px] uppercase font-bold font-mono text-slate-500">
+                      {vercelEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={saveVercelSettings} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="vercel_endpoint_url" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Vercel Webhook / Target API Endpoint URL</label>
+                    <input
+                      id="vercel_endpoint_url"
+                      type="text"
+                      required={vercelEnabled}
+                      className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                      placeholder="https://my-project.vercel.app/api/leads-collector"
+                      value={vercelUrl}
+                      onChange={(e) => setVercelUrl(e.target.value)}
+                    />
+                    <span className="text-[9px] text-slate-400 block italic leading-tight">
+                      New contact inquiries and career submissions are transmitted via POST request to this target URL.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="vercel_custom_header" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Authentication HTTP Header Name</label>
+                      <input
+                        id="vercel_custom_header"
+                        type="text"
+                        className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                        placeholder="Authorization"
+                        value={vercelCustomHeader}
+                        onChange={(e) => setVercelCustomHeader(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="vercel_auth_token" className="text-[10px] font-bold uppercase text-slate-500 block font-mono">Secure Token / Secret Key (Optional)</label>
+                      <input
+                        id="vercel_auth_token"
+                        type="password"
+                        className="w-full bg-white border border-slate-200 text-xs p-2 rounded outline-none focus:border-indigo-600 font-mono"
+                        placeholder="••••••••••••••••••••••••••••"
+                        value={vercelAuthToken}
+                        onChange={(e) => setVercelAuthToken(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-between items-center gap-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={triggerVercelSyncAll}
+                        disabled={vercelSyncing || !vercelEnabled || !vercelUrl}
+                        className="p-2 px-4 font-mono font-bold bg-black hover:bg-slate-900 duration-150 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow select-none cursor-pointer"
+                        title="Sync all previous Firestore entries into Vercel right now"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${vercelSyncing ? "animate-spin" : ""}`} />
+                        {vercelSyncing ? "Syncing Batch..." : "Backport Sync Existing Data"}
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={vercelSaving}
+                      className="p-2.5 px-6 font-mono font-bold bg-[#1B2A6B] hover:bg-slate-800 duration-150 disabled:bg-slate-300 text-white rounded text-xs uppercase tracking-wider flex items-center gap-1.5 shadow cursor-pointer select-none"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-[#F26522]" />
+                      {vercelSaving ? "Saving..." : "Save Vercel Settings"}
+                    </button>
+                  </div>
+                </form>
+
+                {/* VERCEL SYNC RESULTS REPORT CONTAINER */}
+                {vercelSyncResult && (
+                  <div className={`p-4 rounded-md border text-xs font-mono space-y-2 mt-4 max-w-full overflow-x-auto ${
+                    vercelSyncResult.success ? "bg-emerald-50 border-emerald-250 text-emerald-800" : "bg-rose-50 border-rose-250 text-rose-800"
+                  }`}>
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="uppercase flex items-center gap-1">
+                        {vercelSyncResult.success ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Vercel Synchronization Succeeded
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-4 h-4 text-rose-600" /> Vercel Synchronization Failed
+                          </>
+                        )}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setVercelSyncResult(null)}
+                        className="text-slate-450 hover:text-slate-600 text-sm font-sans"
+                      >
+                        &times;
+                      </button>
+                    </div>
+
+                    {vercelSyncResult.success ? (
+                      <div className="space-y-1 text-[11px] leading-relaxed">
+                        <p>Total Corporate Leads synced: <strong className="text-emerald-700">{vercelSyncResult.contacts}</strong></p>
+                        <p>Total Interpreter Registry applications synced: <strong className="text-emerald-700">{vercelSyncResult.interpreters}</strong></p>
+                        <p>Replication failures: <strong className={vercelSyncResult.failed > 0 ? "text-rose-600" : "text-emerald-700 font-bold"}>{vercelSyncResult.failed}</strong></p>
+                        {vercelSyncResult.errors && vercelSyncResult.errors.length > 0 && (
+                          <div className="pt-2 mt-2 border-t border-emerald-150 text-[10px] space-y-1">
+                            <span className="font-bold text-slate-600 uppercase block">Sample Vercel Sync Exceptions:</span>
+                            {vercelSyncResult.errors.map((er: string, idx: number) => (
+                              <div key={idx} className="bg-white/40 p-1 px-1.5 rounded text-rose-750 font-mono">{er}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-rose-750 leading-relaxed font-mono">
+                        Error log trace: {vercelSyncResult.error}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
 

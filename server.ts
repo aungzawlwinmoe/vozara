@@ -210,6 +210,34 @@ async function startServer() {
             handleFirestoreError(dbErr, OperationType.CREATE, path);
           }
           console.log("Successfully saved contact request to Firestore!");
+          try {
+            await syncSingleToConvexServer("contact", {
+              full_name,
+              submitter_email,
+              phone: phone || "",
+              organization: organization || "",
+              service: service || "",
+              language_pair: language_pair || "",
+              message,
+              timestamp
+            });
+          } catch (cvErr) {
+            console.error("Convex server-side auto-sync error:", cvErr);
+          }
+          try {
+            await syncSingleToVercelServer("contact", {
+              full_name,
+              submitter_email,
+              phone: phone || "",
+              organization: organization || "",
+              service: service || "",
+              language_pair: language_pair || "",
+              message,
+              timestamp
+            });
+          } catch (vcErr) {
+            console.error("Vercel server-side auto-sync error:", vcErr);
+          }
         }
       } catch (dbErr) {
         console.error("Failed to write contact request to Firestore:", dbErr);
@@ -366,6 +394,58 @@ async function startServer() {
             handleFirestoreError(dbErr, OperationType.CREATE, path);
           }
           console.log("Successfully saved interpreter application to Firestore!");
+          try {
+            await syncSingleToConvexServer("interpreter", {
+              full_name,
+              submitter_email,
+              phone,
+              location,
+              primary_language,
+              additional_languages: additional_languages || "",
+              interpreting_modes: interpreting_modes || "Both",
+              industries: industries || "",
+              experience_years: experience_years || "",
+              certifications: certifications || "",
+              medical_legal_knowledge: medical_legal_knowledge || "",
+              technical_setup: technical_setup || "",
+              availability: availability || "",
+              linkedin_or_portfolio: linkedin_or_portfolio || "",
+              additional_info: additional_info || "",
+              cv_name: cv_name || "",
+              cv_size: cv_size || "",
+              cv_base64: cv_base64 || "",
+              timestamp,
+              email_sandbox_preview: emailSandboxPreview
+            });
+          } catch (cvErr) {
+            console.error("Convex server-side auto-sync error:", cvErr);
+          }
+          try {
+            await syncSingleToVercelServer("interpreter", {
+              full_name,
+              submitter_email,
+              phone,
+              location,
+              primary_language,
+              additional_languages: additional_languages || "",
+              interpreting_modes: interpreting_modes || "Both",
+              industries: industries || "",
+              experience_years: experience_years || "",
+              certifications: certifications || "",
+              medical_legal_knowledge: medical_legal_knowledge || "",
+              technical_setup: technical_setup || "",
+              availability: availability || "",
+              linkedin_or_portfolio: linkedin_or_portfolio || "",
+              additional_info: additional_info || "",
+              cv_name: cv_name || "",
+              cv_size: cv_size || "",
+              cv_base64: cv_base64 || "",
+              timestamp,
+              email_sandbox_preview: emailSandboxPreview
+            });
+          } catch (vcErr) {
+            console.error("Vercel server-side auto-sync error:", vcErr);
+          }
         }
       } catch (dbErr) {
         console.error("Failed to write interpreter application to Firestore:", dbErr);
@@ -932,6 +1012,529 @@ async function startServer() {
       }
 
       return res.json({ success: true, settings: mailboxAccountsConfig[targetAcct], message: `Server connection settings updated and locked server-side for ${targetAcct}.` });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Helper to sync single item server-side to Convex
+  async function syncSingleToConvexServer(type: "contact" | "interpreter", payload: any) {
+    try {
+      if (!db) return;
+      const configDoc = await getDoc(doc(db, "vozarals_settings", "convex_config"));
+      if (!configDoc.exists()) return;
+      const config = configDoc.data();
+      if (!config.enabled || !config.deploymentUrl) return;
+
+      const mutationPath = type === "contact" ? config.contactMutation : config.interpreterMutation;
+      if (!mutationPath) return;
+
+      let baseUrl = config.deploymentUrl.trim();
+      if (baseUrl.endsWith("/")) {
+        baseUrl = baseUrl.slice(0, -1);
+      }
+      if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+        baseUrl = `https://${baseUrl}`;
+      }
+
+      const url = `${baseUrl}/api/1/mutation`;
+      const args = { ...payload };
+      delete args.id;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (config.deployKey) {
+        headers["Authorization"] = `Bearer ${config.deployKey}`;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          path: mutationPath,
+          args
+        })
+      });
+
+      if (!res.ok) {
+        let txt = await res.text();
+        if (txt.includes("<html") || txt.includes("<!DOCTYPE")) {
+          txt = "HTML error page (likely 502/504 Bad Gateway from proxy/firewall or incorrect URL configuration)";
+        } else if (txt.length > 160) {
+          txt = txt.substring(0, 160) + "...";
+        }
+        console.warn(`[Convex Server-Side AutoSync] Failed with code ${res.status}: ${txt}`);
+      } else {
+        const resJson = await res.json();
+        if (resJson.error) {
+          console.warn(`[Convex Server-Side AutoSync] Error: ${resJson.error}`);
+        } else {
+          console.log(`[Convex Server-Side AutoSync] Successfully synced ${type} submission!`);
+        }
+      }
+    } catch (err) {
+      console.warn("[Convex Server-Side AutoSync] Failed to execute sync:", err);
+    }
+  }
+
+  // Internal helper for server-side bulk sync
+  async function syncSingleToConvexServerSideInternal(type: "contact" | "interpreter", payload: any, config: any) {
+    try {
+      const mutationPath = type === "contact" ? config.contactMutation : config.interpreterMutation;
+      if (!mutationPath) return { success: false, error: "Mutation path missing in config" };
+
+      let baseUrl = config.deploymentUrl.trim();
+      if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+      if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+        baseUrl = `https://${baseUrl}`;
+      }
+
+      const url = `${baseUrl}/api/1/mutation`;
+      const args = { ...payload };
+      delete args.id;
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (config.deployKey) {
+        headers["Authorization"] = `Bearer ${config.deployKey}`;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ path: mutationPath, args })
+      });
+
+      if (!res.ok) {
+        let txt = await res.text();
+        if (txt.includes("<html") || txt.includes("<!DOCTYPE")) {
+          txt = "HTML error page (likely 502/504 Bad Gateway from proxy/firewall or incorrect URL configuration)";
+        } else if (txt.length > 160) {
+          txt = txt.substring(0, 160) + "...";
+        }
+        return { success: false, error: `Convex responded with status ${res.status}: ${txt}` };
+      }
+      const resJson = await res.json();
+      if (resJson.error) {
+        return { success: false, error: resJson.error };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  // Helper to sync single item server-side to Vercel
+  async function syncSingleToVercelServer(type: "contact" | "interpreter", payload: any) {
+    try {
+      if (!db) return;
+      const configDoc = await getDoc(doc(db, "vozarals_settings", "vercel_config"));
+      if (!configDoc.exists()) return;
+      const config = configDoc.data();
+      if (!config.enabled || !config.endpointUrl) return;
+
+      let url = config.endpointUrl.trim();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `https://${url}`;
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (config.authToken) {
+        const headerName = config.customHeader ? config.customHeader.trim() : "Authorization";
+        if (headerName.toLowerCase() === "authorization") {
+          headers[headerName] = config.authToken.startsWith("Bearer ") ? config.authToken : `Bearer ${config.authToken}`;
+        } else {
+          headers[headerName] = config.authToken;
+        }
+      }
+
+      const body = {
+        type,
+        source: "vozarals_portal",
+        timestamp: new Date().toISOString(),
+        data: { ...payload }
+      };
+      delete body.data.id;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        let txt = await res.text();
+        if (txt.includes("<html") || txt.includes("<!DOCTYPE")) {
+          txt = "HTML error page (likely 502/504 Bad Gateway or 404 Route Not Found on Vercel)";
+        } else if (txt.length > 160) {
+          txt = txt.substring(0, 160) + "...";
+        }
+        console.warn(`[Vercel Server-Side AutoSync] Failed with code ${res.status}: ${txt}`);
+      } else {
+        const resJson = await res.json().catch(() => ({}));
+        if (resJson.error) {
+          console.warn(`[Vercel Server-Side AutoSync] Error: ${resJson.error}`);
+        } else {
+          console.log(`[Vercel Server-Side AutoSync] Successfully synced ${type} submission!`);
+        }
+      }
+    } catch (err) {
+      console.warn("[Vercel Server-Side AutoSync] Failed to execute sync:", err);
+    }
+  }
+
+  // Internal helper for server-side Vercel bulk sync
+  async function syncSingleToVercelServerSideInternal(type: "contact" | "interpreter", payload: any, config: any) {
+    try {
+      let url = config.endpointUrl.trim();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `https://${url}`;
+      }
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (config.authToken) {
+        const headerName = config.customHeader ? config.customHeader.trim() : "Authorization";
+        if (headerName.toLowerCase() === "authorization") {
+          headers[headerName] = config.authToken.startsWith("Bearer ") ? config.authToken : `Bearer ${config.authToken}`;
+        } else {
+          headers[headerName] = config.authToken;
+        }
+      }
+
+      const body = {
+        type,
+        source: "vozarals_portal",
+        timestamp: new Date().toISOString(),
+        data: { ...payload }
+      };
+      delete body.data.id;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        let txt = await res.text();
+        if (txt.includes("<html") || txt.includes("<!DOCTYPE")) {
+          txt = "HTML error page (likely 502/504 Bad Gateway or 404 Route Not Found on Vercel)";
+        } else if (txt.length > 160) {
+          txt = txt.substring(0, 160) + "...";
+        }
+        return { success: false, error: `Vercel responded with status ${res.status}: ${txt}` };
+      }
+      const resJson = await res.json().catch(() => ({}));
+      if (resJson.error) {
+        return { success: false, error: resJson.error };
+      }
+      return { success: true };
+    } catch (err: any) {
+      let errMsg = err.message || String(err);
+      if (errMsg.includes("ECONNREFUSED") || errMsg.includes("ENOTFOUND") || errMsg.includes("fetch failed")) {
+        errMsg = `${errMsg} (Tip: For testing, use the local mock URL 'http://localhost:3000/api/sandbox/vercel-mock')`;
+      }
+      return { success: false, error: errMsg };
+    }
+  }
+
+  // Simulated Vercel Endpoint Receiver for Local Testing/Sandbox Mode
+  app.post("/api/sandbox/vercel-mock", (req, res) => {
+    try {
+      const { type, source, timestamp, data } = req.body;
+      console.log(`[Vercel Sandbox Mock Gateway] Received ${type} payload from ${source}:`, data);
+      
+      // Inject dummy audit log for high interactive visibility
+      const mockLog = {
+        id: "al-mock-" + Date.now() + Math.floor(Math.random() * 100),
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        userId: "system-vercel-mock@vozarals.com",
+        userEmail: "system-vercel-mock@vozarals.com",
+        action: `MOCK_VERCEL_RECV_${type.toUpperCase()}`,
+        severity: "INFO",
+        details: `Simulated Vercel backend received ${type} record of ${data ? (data.full_name || data.submitter_email) : "anonymous"}`
+      };
+      
+      auditLogs.unshift(mockLog);
+      
+      return res.json({
+        success: true,
+        message: "Payload accepted by Sandbox Vercel Gateway simulator.",
+        received: {
+          type,
+          source,
+          timestamp,
+          keyName: data ? (data.full_name || data.submitter_email) : "unlabeled"
+        }
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: "Simulator failed parsing mock body: " + err.message });
+    }
+  });
+
+  // GET Vercel API Configuration
+  app.get("/api/vercel/config", requireAdmin, async (req, res) => {
+    try {
+      if (db) {
+        const configDoc = await getDoc(doc(db, "vozarals_settings", "vercel_config"));
+        if (configDoc.exists()) {
+          return res.json({ success: true, config: configDoc.data() });
+        }
+      }
+      return res.json({
+        success: true,
+        config: {
+          enabled: false,
+          endpointUrl: "",
+          authToken: "",
+          customHeader: "Authorization"
+        }
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST Vercel API Configuration
+  app.post("/api/vercel/config", requireAdmin, async (req, res) => {
+    try {
+      const { enabled, endpointUrl, authToken, customHeader } = req.body;
+      const config = {
+        enabled: enabled === true,
+        endpointUrl: endpointUrl || "",
+        authToken: authToken || "",
+        customHeader: customHeader || "Authorization"
+      };
+
+      if (db) {
+        await setDoc(doc(db, "vozarals_settings", "vercel_config"), config);
+      }
+
+      // Add audit log
+      const auditRec = {
+        id: "al-" + Date.now(),
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        userId: "admin@vozarals.com",
+        userEmail: "admin@vozarals.com",
+        action: "CREDENTIALS_SET_VERCEL",
+        severity: "INFO",
+        details: `Vercel deployment settings modified. Enabled: ${config.enabled}, URL: ${config.endpointUrl}`
+      };
+      auditLogs.unshift(auditRec);
+      if (db) {
+        await setDoc(doc(db, "vozarals_audit_logs", auditRec.id), auditRec);
+      }
+
+      return res.json({ success: true, config, message: "Vercel sync configuration saved successfully." });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST Trigger Batch Historical Sync for Vercel
+  app.post("/api/vercel/sync-all", requireAdmin, async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(400).json({ error: "Firestore is not online." });
+      }
+
+      const configDoc = await getDoc(doc(db, "vozarals_settings", "vercel_config"));
+      if (!configDoc.exists()) {
+        return res.status(400).json({ error: "Vercel configuration is missing." });
+      }
+      const config = configDoc.data();
+      if (!config.enabled || !config.endpointUrl) {
+        return res.status(400).json({ error: "Vercel sync is not activated or endpoint URL is empty." });
+      }
+
+      let contactCount = 0;
+      let interpreterCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      try {
+        const contactSnap = await getDocs(collection(db, "contact_submissions"));
+        const contactDocs: any[] = [];
+        contactSnap.forEach(d => {
+          contactDocs.push({ id: d.id, ...d.data() });
+        });
+
+        for (const docData of contactDocs) {
+          const syncRes = await syncSingleToVercelServerSideInternal("contact", docData, config);
+          if (syncRes.success) {
+            contactCount++;
+          } else {
+            failedCount++;
+            if (syncRes.error) errors.push(`Contact ${docData.full_name}: ${syncRes.error}`);
+          }
+        }
+      } catch (e: any) {
+        errors.push(`Error reading contacts: ${e.message}`);
+      }
+
+      try {
+        const interpreterSnap = await getDocs(collection(db, "interpreter_submissions"));
+        const interpreterDocs: any[] = [];
+        interpreterSnap.forEach(d => {
+          interpreterDocs.push({ id: d.id, ...d.data() });
+        });
+
+        for (const docData of interpreterDocs) {
+          const syncRes = await syncSingleToVercelServerSideInternal("interpreter", docData, config);
+          if (syncRes.success) {
+            interpreterCount++;
+          } else {
+            failedCount++;
+            if (syncRes.error) errors.push(`Interpreter ${docData.full_name}: ${syncRes.error}`);
+          }
+        }
+      } catch (e: any) {
+        errors.push(`Error reading interpreters: ${e.message}`);
+      }
+
+      return res.json({
+        success: true,
+        contactSubmissionsSynced: contactCount,
+        interpreterSubmissionsSynced: interpreterCount,
+        failedCount,
+        errors: errors.slice(0, 10)
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET Convex API Configuration
+  app.get("/api/convex/config", requireAdmin, async (req, res) => {
+    try {
+      if (db) {
+        const configDoc = await getDoc(doc(db, "vozarals_settings", "convex_config"));
+        if (configDoc.exists()) {
+          return res.json({ success: true, config: configDoc.data() });
+        }
+      }
+      return res.json({
+        success: true,
+        config: {
+          enabled: false,
+          deploymentUrl: "",
+          contactMutation: "submissions:addContact",
+          interpreterMutation: "submissions:addInterpreter",
+          deployKey: ""
+        }
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST Convex API Configuration
+  app.post("/api/convex/config", requireAdmin, async (req, res) => {
+    try {
+      const { enabled, deploymentUrl, contactMutation, interpreterMutation, deployKey } = req.body;
+      const config = {
+        enabled: enabled === true,
+        deploymentUrl: deploymentUrl || "",
+        contactMutation: contactMutation || "submissions:addContact",
+        interpreterMutation: interpreterMutation || "submissions:addInterpreter",
+        deployKey: deployKey || ""
+      };
+
+      if (db) {
+        await setDoc(doc(db, "vozarals_settings", "convex_config"), config);
+      }
+
+      // Add audit log
+      const auditRec = {
+        id: "al-" + Date.now(),
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        userId: "admin@vozarals.com",
+        userEmail: "admin@vozarals.com",
+        action: "CREDENTIALS_SET_CONVEX",
+        severity: "INFO",
+        details: `Convex deployment settings modified. Enabled: ${config.enabled}, URL: ${config.deploymentUrl}`
+      };
+      auditLogs.unshift(auditRec);
+      if (db) {
+        await setDoc(doc(db, "vozarals_audit_logs", auditRec.id), auditRec);
+      }
+
+      return res.json({ success: true, config, message: "Convex sync configuration saved successfully." });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST Trigger Batch Historical Sync
+  app.post("/api/convex/sync-all", requireAdmin, async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(400).json({ error: "Firestore is not online." });
+      }
+
+      const configDoc = await getDoc(doc(db, "vozarals_settings", "convex_config"));
+      if (!configDoc.exists()) {
+        return res.status(400).json({ error: "Convex configuration is missing." });
+      }
+      const config = configDoc.data();
+      if (!config.enabled || !config.deploymentUrl) {
+        return res.status(400).json({ error: "Convex sync is not activated or deployment URL is empty." });
+      }
+
+      let contactCount = 0;
+      let interpreterCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      try {
+        const contactSnap = await getDocs(collection(db, "contact_submissions"));
+        const contactDocs: any[] = [];
+        contactSnap.forEach(d => {
+          contactDocs.push({ id: d.id, ...d.data() });
+        });
+
+        for (const docData of contactDocs) {
+          const syncRes = await syncSingleToConvexServerSideInternal("contact", docData, config);
+          if (syncRes.success) {
+            contactCount++;
+          } else {
+            failedCount++;
+            if (syncRes.error) errors.push(`Contact ${docData.full_name}: ${syncRes.error}`);
+          }
+        }
+      } catch (e: any) {
+        errors.push(`Error reading contacts: ${e.message}`);
+      }
+
+      try {
+        const interpreterSnap = await getDocs(collection(db, "interpreter_submissions"));
+        const interpreterDocs: any[] = [];
+        interpreterSnap.forEach(d => {
+          interpreterDocs.push({ id: d.id, ...d.data() });
+        });
+
+        for (const docData of interpreterDocs) {
+          const syncRes = await syncSingleToConvexServerSideInternal("interpreter", docData, config);
+          if (syncRes.success) {
+            interpreterCount++;
+          } else {
+            failedCount++;
+            if (syncRes.error) errors.push(`Interpreter ${docData.full_name}: ${syncRes.error}`);
+          }
+        }
+      } catch (e: any) {
+        errors.push(`Error reading interpreters: ${e.message}`);
+      }
+
+      return res.json({
+        success: true,
+        contactSubmissionsSynced: contactCount,
+        interpreterSubmissionsSynced: interpreterCount,
+        failedCount,
+        errors: errors.slice(0, 10)
+      });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
